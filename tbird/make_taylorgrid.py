@@ -1,72 +1,128 @@
-# from mpi4py import MPI
-# comm = MPI.COMM_WORLD
-# size = comm.Get_size()
-# rank = comm.Get_rank()
-rank = 0
-
 import numpy as np
 import os
 import sys
-import Grid
-import pybird_fullresum as pybird
 import copy
-import time
+from configobj import ConfigObj
 
-#time.sleep(4)
+sys.path.append("../")
+from pybird_dev import pybird, projection #+ added projection
+from tbird.Grid import grid_properties, run_camb, run_class
 
-basedir = './'
-OUTPATH = os.path.join(basedir, "output")
-outpk = os.path.join(basedir, "Pk")
+if __name__ == "__main__":
 
+    # Read in the config file, job number and total number of jobs
+    configfile = sys.argv[1]
+    job_no = int(sys.argv[2])
+    #njobs = int(sys.argv[3])
+    njobs = 81
+    pardict = ConfigObj(configfile)
 
-ncores = 1#size
-nrun = 1#int(sys.argv[1])
-runs = 1#int(sys.argv[2])
-lenrun = int(len(Grid.flattenedgrid) / runs)
-thetarun = Grid.flattenedgrid[nrun * lenrun:(nrun+1) * lenrun]
-Ntot = len(thetarun)
-sizered = int(Ntot/ncores)
+    # Compute some stuff for the grid based on the config file
+    valueref, delta, flattenedgrid, _ = grid_properties(pardict)
+    lenrun = int(len(flattenedgrid) / njobs)
+    start = job_no * lenrun
+    final = min((job_no + 1) * lenrun, len(flattenedgrid))
+    arrayred = flattenedgrid[start:final]
 
-arrayred = Grid.flattenedgrid #thetarun[rank * sizered:(rank+1) * sizered]
-sizearray = len(arrayred)
+    # Get some cosmological values at the grid centre
+    if pardict["code"] == "CAMB":
+        kin, Pin, Om, Da_fid, Hz_fid, fN_fid, sigma8_fid, sigma12, r_d = run_camb(pardict)
+    else:
+        kin, Pin, Om, Da_fid, Hz_fid, fN_fid, sigma8_fid, sigma12, r_d = run_class(pardict)
 
-freepar = Grid.freepar
-#print("lenrun, sizered", lenrun, sizered)
+    # Set up pybird
+    Nl = 3
+    z_pk = float(pardict["z_pk"])
+    correlator = pybird.Correlator()
+    correlatorcf = pybird.Correlator()
 
-### To create outside the grid
-nonlinear = pybird.NonLinear(load=True,save=True)
-resum = pybird.Resum()
-kbird = pybird.common.k
-allk = np.concatenate([kbird, kbird]).reshape(-1,1)
-
-allPlin = []
-allPloop = []
-for i, theta in enumerate(arrayred):
-    parameters = copy.deepcopy(Grid.parref)
-    truetheta = Grid.valueref + theta * Grid.delta
-    #idx = nrun * lenrun + rank * sizered + i
-    #print("nrun, rank, i", nrun, rank, i)
-    idx = i
-    print ("i on tot", i, sizearray)
-
-    parameters["PathToOutput"] = os.path.join(OUTPATH, 'output' + str(nrun) + str(rank) + str(i))
-    for k, var in enumerate(freepar):
-        parameters[var] = truetheta[k]
-    # parameters['h'] = 1/parameters['invh']
-    kin, Plin, z, Omega_m = Grid.CompPterms(parameters)
-    bird = pybird.Bird(kin, Plin, Omega_m, z, full=False)
-    nonlinear.PsCf(bird)
-    bird.setPsCfl()
-    resum.Ps(bird, full=False)
-    bird.subtractShotNoise()
+    correlator.set(
+        {
+            "output": "bPk",
+            "multipole": Nl,
+            "z": z_pk,
+            "optiresum": False,
+            "with_bias": False,
+            "with_nlo_bias": True,
+            "with_exact_time": True,
+            "kmax": 0.6,
+            "with_AP": True,
+            "DA_AP": Da_fid,
+            "H_AP": Hz_fid,
+            "window": True, #+
+            "with_window": True, #+
+            "windowPk": r"Ql_z3_NGC_rebinned_1000bins", #+
+            "windowCf": r"Ql_z3_NGC_rebinned_1000bins.dat", #+
+        }
+    )
+    setattr(correlator,"path_to_window", r"mnt/c/Users/s4393083/pybird/tbird/") #+
+    setattr(correlator, "window_configspace_file", r"Ql_z3_NGC_rebinned_1000bins.dat") #+
+    setattr(correlator, "window_fourier_name", r"Ql_z3_NGC_rebinned_1000bins") #+ file name, projection adds kmax etc.
     
-    Plin, Ploop = bird.formatTaylor()
-    idxcol = np.full([Plin.shape[0], 1], idx)
-    allPlin.append(np.hstack([Plin, idxcol]))
-    allPloop.append(np.hstack([Ploop, idxcol]))
-    if (i == 0) or ((i+1) % 100 == 0):
-        print("theta check: ", Grid.flattenedgrid[idx], theta, truetheta)
-        # np.save(os.path.join(outpk, "temp", "Plin_run%s_rank%si%s.npy" % (str(nrun), str(rank), str(i))), np.array(allPlin))
-        # np.save(os.path.join(outpk, "temp", "Ploop_run%s_rank%si%s.npy" % (str(nrun), str(rank), str(i))), np.array(allPloop))
-    np.save(os.path.join(outpk, "Plin_run%s_rank%s.npy" % (str(nrun), str(rank))), np.array(allPlin))
-    np.save(os.path.join(outpk, "Ploop_run%s_rank%s.npy" % (str(nrun), str(rank))), np.array(allPloop))
+    #WindowFunc = projection.Projection.setWindow(correlator)  #+
+    
+    correlatorcf.set(
+        {
+            "output": "bCf",
+            "multipole": Nl,
+            "z": z_pk,
+            "optiresum": False,
+            "with_bias": False,
+            "with_nlo_bias": True,
+            "with_exact_time": True,
+            "with_AP": True,
+            "DA_AP": Da_fid,
+            "H_AP": Hz_fid,
+            "window": True, #+
+            "with_window": True, #+
+        }
+    )
+
+    # Now loop over all grid cells and compute the EFT model
+    allPlin = []
+    allPloop = []
+    allClin = []
+    allCloop = []
+    allParams = []
+    allPin = []
+    for i, theta in enumerate(arrayred):
+        parameters = copy.deepcopy(pardict)
+        truetheta = valueref + theta * delta
+        idx = i
+        print("i on tot", i, len(arrayred))
+
+        for k, var in enumerate(pardict["freepar"]):
+            parameters[var] = truetheta[k]
+        if parameters["code"] == "CAMB":
+            kin, Pin, Om, Da, Hz, fN, sigma8, sigma12, r_d = run_camb(parameters)
+        else:
+            kin, Pin, Om, Da, Hz, fN, sigma8, sigma12, r_d = run_class(parameters)
+
+        # Get non-linear power spectrum from pybird
+        correlator.compute({"k11": kin, "P11": Pin, "z": z_pk, "Omega0_m": Om, "f": fN, "DA": Da, "H": Hz})
+        correlatorcf.compute({"k11": kin, "P11": Pin, "z": z_pk, "Omega0_m": Om, "f": fN, "DA": Da, "H": Hz})
+
+        Params = np.array([Om, Da, Hz, fN, sigma8, sigma12, r_d])
+        Plin, Ploop = correlator.bird.formatTaylorPs()
+        Clin, Cloop = correlatorcf.bird.formatTaylorCf()
+        Pin = np.c_[kin, Pin]
+        idxcol = np.full([Pin.shape[0], 1], idx)
+        allPin.append(np.hstack([Pin, idxcol]))
+        idxcol = np.full([Plin.shape[0], 1], idx)
+        allPlin.append(np.hstack([Plin, idxcol]))
+        allPloop.append(np.hstack([Ploop, idxcol]))
+        idxcol = np.full([Clin.shape[0], 1], idx)
+        allClin.append(np.hstack([Clin, idxcol]))
+        allCloop.append(np.hstack([Cloop, idxcol]))
+        allParams.append(np.hstack([Params, [idx]]))
+        if (i == 0) or ((i + 1) % 10 == 0):
+            print("theta check: ", arrayred[idx], theta, truetheta)
+        if parameters["code"] == "CAMB":
+            np.save(os.path.join(pardict["outpk"], "CAMB_run%s.npy" % (str(job_no))), np.array(allPin))
+        else:
+            np.save(os.path.join(pardict["outpk"], "CLASS_run%s.npy" % (str(job_no))), np.array(allPin))
+        np.save(os.path.join(pardict["outpk"], "Plin_run%s.npy" % (str(job_no))), np.array(allPlin))
+        np.save(os.path.join(pardict["outpk"], "Ploop_run%s.npy" % (str(job_no))), np.array(allPloop))
+        np.save(os.path.join(pardict["outpk"], "Clin_run%s.npy" % (str(job_no))), np.array(allClin))
+        np.save(os.path.join(pardict["outpk"], "Cloop_run%s.npy" % (str(job_no))), np.array(allCloop))
+        np.save(os.path.join(pardict["outpk"], "Params_run%s.npy" % (str(job_no))), np.array(allParams))
