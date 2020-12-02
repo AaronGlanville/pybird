@@ -11,8 +11,7 @@ import os
 
 sys.path.append("../")
 
-#from fitting_codes.fitting_utils_NGCSGC_combined import (
-from fitting_codes.fitting_utils_NGCSGC_combined import(
+from fitting_codes.fitting_utils_NGCSGC_combined import (
     FittingData_NGCSGC,
     BirdModel,
     create_plot_combined,
@@ -37,7 +36,7 @@ def do_emcee(func, start, birdmodel, fittingdata, plt):
     
     #chainfile = 'TestBOSSNGC_z1NGC+SGC_CombinedFit_WinFunc_s10fixed_40000Steps.hdf5'
     #chainfile = 'z1_NGC+NGC_40000_Stept_Test.hdf5'
-    chainfile = 'z1_NGC+NGC_40000_steps_Test2.hdf5'
+    chainfile = 'z1_NGC+NGC_40000_steps_Test_UpdatedPi.hdf5'
     print(chainfile)
 
     # Set up the backend
@@ -98,7 +97,7 @@ def lnprior(params, birdmodel, data):
         b1_NGC, c2_NGC, c4_NGC = params[4:7]
         b1_SGC, c2_SGC, c4_SGC = params[7:10]
     else:
-        b1, c2, b3, c4, cct, cr1, cr2, ce1, cemono, cequad, bnlo = params[-11:]
+        b1_NGC, c2_NGC, b3_NGC, c4_NGC, cct_NGC, cr1_NGC, cr2_NGC, ce1_NGC, cemono_NGC, cequad_NGC, bnlo_NGC, b1_SGC, c2_SGC, b3_SGC, c4_SGC, cct_SGC, cr1_SGC, cr2_SGC, ce1_SGC, cemono_SGC, cequad_SGC, bnlo_SGC = params[-22:]
         
     ln10As, h, omega_cdm, omega_b = params[:4]
 
@@ -153,40 +152,41 @@ def lnprior(params, birdmodel, data):
 #DEFINE PRIOR LIST IN EACH INI
         
         # Gaussian prior for b3 of width 2 centred on 0
-        b3_prior = -0.5 * 0.25 * b3 ** 2
+        b3_prior = -0.5 * ((0.25 * b3_NGC ** 2)+(0.25 * b3_SGC ** 2))
 
         # Gaussian prior for cct of width 2 centred on 0
-        cct_prior = -0.5 * 0.25 * cct ** 2
+        cct_prior = -0.5 * ((0.25 * cct_NGC ** 2)+(0.25 * cct_SGC ** 2))
 
         # Gaussian prior for cr1 of width 4 centred on 0
-        cr1_prior = -0.5 * 0.0625 * cr1 ** 2
+        cr1_prior = -0.5 * ((0.0625 * cr1_NGC ** 2)+(0.0625 * cr1_SGC ** 2))
 
         # Gaussian prior for cr1 of width 4 centred on 0
-        cr2_prior = -0.5 * 0.0625 * cr2 ** 2
+        cr2_prior = -0.5 * ((0.0625 * cr2_NGC ** 2)+(0.0625 * cr2_SGC ** 2))
 
         # Gaussian prior for ce1 of width 2 centred on 0
-        ce1_prior = -0.5 * 0.25 * ce1 ** 2
+        ce1_prior = -0.5 * ((0.25 * ce1_NGC ** 2)+(0.25 * ce1_SGC ** 2))
 
         # Gaussian prior for cemono of width 2 centred on 0
-        cemono_prior = -0.5 * 0.25 * cemono ** 2
+        cemono_prior = -0.5 * ((0.25 * cemono_NGC ** 2)+(0.25 * cemono_SGC ** 2))
 
         # Gaussian prior for cequad of width 2 centred on 0
-        cequad_prior = -0.5 * 0.25 * cequad ** 2
+        cequad_prior = -0.5 * ((0.25 * cequad_NGC ** 2)+(0.25 * cequad_SGC ** 2))
 
         # Gaussian prior for bnlo of width 2 centred on 0
-        bnlo_prior = -0.5 * 0.25 * bnlo ** 2
+        bnlo_prior = -0.5 * ((0.25 * bnlo_NGC ** 2)+(0.25 * bnlo_NGC ** 2))
 
         return ( #Only for non-marginalised evaluations, not worrying for now
             omega_b_prior
             + c4_NGC_prior
-            + b3_prior
-            + cct_prior
-            + cr1_prior
-            + cr2_prior
-            + ce1_prior
-            + cemono_prior
-            + cequad_prior
-            + bnlo_prior
+            + c4_SGC_prior
+            + b3_prior*2
+            + cct_prior*2
+            + cr1_prior*2
+            + cr2_prior*2
+            + ce1_prior*2
+            + cemono_prior*2
+            + cequad_prior*2
+            + bnlo_prior*2
         )
 
 def lnlike(params, birdmodel, fittingdata, plt):
@@ -197,55 +197,86 @@ def lnlike(params, birdmodel, fittingdata, plt):
         
         b2_SGC = (params[-2] + params[-1]) / np.sqrt(2.0)
         b4_SGC = (params[-2] - params[-1]) / np.sqrt(2.0) #check indexing if any issues come up
-                
-        #bs = [params[4 + (3*index)], b2, 0.0, b4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] #- Must define independent bias terms for NGC/SGC
+        
         bs_NGC = [params[-6], b2_NGC, 0.0, b4_NGC, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         bs_SGC = [params[-3], b2_SGC, 0.0, b4_SGC, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] 
-            
+   
     else: #haven't updated bias parameters for non-marginalised cases
-        b2 = (params[-10] + params[-8]) / np.sqrt(2.0)
-        b4 = (params[-10] - params[-8]) / np.sqrt(2.0)
-        bs = [
+    
+        b2_NGC = (params[-21] + params[-19]) / np.sqrt(2.0)
+        b4_NGC = (params[-21] - params[-19]) / np.sqrt(2.0)
+        bs_NGC = [
+            params[-22],
+            b2_NGC,
+            params[-20],
+            b4_NGC,
+            params[-18],
+            params[-17],
+            params[-16],
+            params[-15] * NGC_shot_noise,
+            params[-14] * NGC_shot_noise,
+            params[-13] * NGC_shot_noise,
+            params[-12],
+            ]
+
+        b2_SGC = (params[-10] + params[-8]) / np.sqrt(2.0)
+        b4_SGC = (params[-10] - params[-8]) / np.sqrt(2.0)
+        bs_SGC = [
             params[-11],
-            b2,
+            b2_SGC,
             params[-9],
-            b4,
+            b4_SGC,
             params[-7],
             params[-6],
             params[-5],
-            params[-4] * fittingdata.data["shot_noise"],
-            params[-3] * fittingdata.data["shot_noise"],
-            params[-2] * fittingdata.data["shot_noise"],
+            params[-4] * SGC_shot_noise,
+            params[-3] * SGC_shot_noise,
+            params[-2] * SGC_shot_noise,
             params[-1],
             ]
+
     #Get the bird model
-    #if birdmodel.pardict["BBN_Omega_b"]:
     ln10As, h, omega_cdm, omega_b = params[:4]
-    
-    #else: #Assumed constant Omega_b/Omega_cdm ratio
-    #    ln10As, h, omega_cdm = params[:3]
-    #    omega_b = birdmodel.valueref[3] / birdmodel.valueref[2] * omega_cdm
-
-
-#Creates model for given bias parameters over provided k's to calculate chi_squared
     Plin, Ploop = birdmodel.compute_pk([ln10As, h, omega_cdm, omega_b]) #Plin/Ploop only relies on cosmology, does not need NGC/SGC distinction
-    #print("x_data = ")
-    #print(fittingdata_combined.data["x_data"])
     P_model, P_model_interp = birdmodel.compute_model_NGCSGC(bs_NGC, bs_SGC, Plin, Ploop, fittingdata_combined.data["x_data"])#just need k-space, should be the same across files
-    Pi = birdmodel.get_Pi_for_marg_NGCSGC(Ploop, bs_NGC[0], bs_SGC[0], NGC_shot_noise, SGC_shot_noise, fittingdata_combined.data["x_data"]) #Pi seems kinda dodgy- interpolated P from discrete points? idk    
-    #np.savetxt("Pi_output.txt", Pi)
-    #-------------------
-    #In get_pi_for_marg, at the moment we are stacking the Pi horizontally, rather than tacking it on to double the length of the matrix. Therefore, when doing Pi.(cov_inv.Pi_T), the dot product has the wrong dimensionality
-    #-------------------
+    Pi = birdmodel.get_Pi_for_marg_NGCSGC(Ploop, bs_NGC[0], bs_SGC[0], NGC_shot_noise, SGC_shot_noise, fittingdata_combined.data["x_data"]) #Pi seems kinda dodgy- interpolated P from discrete points? idk     
+
+    #Testing to see whether plotting model with 11 linear bias  parameters analytically marginalised give reasonable plots
+    #NOTE: DO NOT PASS THESE TO CHI^2, FOR PLOTS ONLY
+    if birdmodel.pardict["do_marg"]:
+        bs_analytic = birdmodel.compute_bestfit_analytic(Pi, fittingdata_combined.data)
+        #print("bs_analytic")
+        #print(bs_analytic)
+        bs_NGC_analytic = [
+            params[-6],
+            b2_NGC,
+            bs_analytic[0],
+            b4_NGC,
+            bs_analytic[1],
+            bs_analytic[2],
+            bs_analytic[3],
+            bs_analytic[4],
+            bs_analytic[5],
+            bs_analytic[6],
+            bs_analytic[7],
+       ]
+
+        bs_SGC_analytic = [
+            params[-3],
+            b2_SGC,
+            bs_analytic[8],
+            b4_SGC,
+            bs_analytic[9],
+            bs_analytic[10],
+            bs_analytic[11],
+            bs_analytic[12],
+            bs_analytic[13],
+            bs_analytic[14],
+            bs_analytic[15],
+       ]
+
     chi_squared = birdmodel.compute_chi2(P_model_interp, Pi, fittingdata_combined.data) #data.data only used for inverse covariance matrix, joint cov_matrix for NGC/SGC
-    best_fit = birdmodel.compute_bestfit_analytic
-    #print("In-loop chi-squared %lf" %birdmodel.compute_chi2(P_model_interp, Pi, fittingdata_combined.data))
-
-    #update_plot(pardicts, fittingdata.data["x_data"], P_model_interp, plt)
-        #if np.random.rand() <
-        #    print(params, chi_squared)
-
-    #print("Returned chi_squared = %lf" %chi_squared)
+    #update_plot(pardict_BOSS_NGC_z1, fittingdata.data["x_data"], P_model_interp_plotting, plt) #Passing data vector with analytically marginalised linear bias params for plotting
     return -0.5 * chi_squared
 
 
@@ -302,6 +333,7 @@ if __name__ == "__main__":
 
     plt = None
     if plot_flag:
+        print("Plot_flag accepted!")
         plt = create_plot_combined(pardict_BOSS_NGC_z1, pardict_BOSS_SGC_z1, fittingdata_combined)
 
 #DO THIS FOR EVERY INDIVIDUAL BIRDMODEL
@@ -310,7 +342,7 @@ if __name__ == "__main__":
     if birdmodel_combined.pardict["do_marg"]:
         start = np.concatenate([birdmodel_combined.valueref[:4], [1.3, 0.5, 0.5, 1.3, 0.5, 0.5]])
     else:
-        start = np.concatenate([birdmodel_combined.valueref[:4], [1.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]])
+        start = np.concatenate([birdmodel_combined.valueref[:4], [1.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]])
 
     # Does an optimization
     result = do_optimization(lambda *args: -lnpost(*args), start, birdmodel_combined, fittingdata_combined, plt)
