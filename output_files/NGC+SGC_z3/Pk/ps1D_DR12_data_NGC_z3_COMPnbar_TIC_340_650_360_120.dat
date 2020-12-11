@@ -1,34 +1,3 @@
-### header ###
-fiducial parameters:
-Omega_m = 0.31
-Omega_nu = 0
-Omega_de = 0.69
-Omega_k = 0
-H_0 = 100
-w_de = -1
-zeff = 0.61
-beta = 0
-fgrowth = 0
-b_1 = 2
-gamma = 0.55
-Lx = 1800 Ly = 3400 Lz = 1900
-nx = 340 ny = 650 nz = 360
-xoffset = -982.047 yoffset = -47.9468 zoffset = 798.097
-bins = 120 dk = 0.005
-kx_ny = 0.593412 ky_ny = 0.600599 kz_ny = 0.595249
-############################
-A(data) = 8.68915 (not used)
-A(ran) = 8.81219 (used)
-Ngal = 435742
-weighted Ngal = 142822
-Nran = 22768186
-weighted Nran = 7.1241e+06
-SN(data) = 6346.91
-SN(ran) = 124.442
-SN(data+ran) = 6471.36
-############################
-5 columns: k_central k_mean P_0(k) P_2(k) N_modes
-### header ###
 0.0025 0.00394609 196711 -5194.11 12
 0.0075 0.00799572 108901 52590.9 84
 0.0125 0.0128299 64834.3 6913.26 236
