@@ -27,10 +27,11 @@ class BirdModel:
 
         # Some constants for the EFT model
         self.k_m, self.k_nl = 0.7, 0.7
-        self.eft_priors_standard = np.array([2.0, 2.0, 4.0, 4.0, 2.0, 2.0, 2.0, 2.0]) #Standard gaussian widths for EFT model
-        self.eft_priors = np.concatenate((self.eft_priors_standard, self.eft_priors_standard)) #concatenated, doubled for NGC/SGC fits
+        self.eft_priors = np.array([2.0, 2.0, 4.0, 4.0, 2.0, 2.0, 2.0, 2.0]) #standard gaussian widths for EFT model
+        self.eft_priors = np.concatenate((self.eft_priors, self.eft_priors))
         self.priormat = np.diagflat(1.0 / self.eft_priors ** 2)
-
+        #print("priormat = ")
+        #print(self.priormat)
         # Get some values at the grid centre
         if pardict["code"] == "CAMB":
             self.kmod, self.Pmod, self.Om, self.Da, self.Hz, self.fN, self.sigma8, self.sigma12, self.r_d = run_camb(
@@ -50,26 +51,27 @@ class BirdModel:
 
         # Prepare the model
         if self.direct:
-            print("Direct not currently supported :(")
-            exit()
+            # print("Direct not currently supported :(")
+            # exit()
             if self.template:
-                self.correlator, self.bird = self.setup_pybird()
+                self.correlator = self.setup_pybird()
                 self.kin = self.correlator.projection.xout
             else:
-                self.correlator, self.bird = self.setup_pybird()
+                self.correlator = self.setup_pybird()
                 self.kin = self.correlator.projection.xout
         else:
-            self.kin, self.paramsmod, self.linmod, self.loopmod = self.load_model()
+            #self.kin, self.paramsmod, self.linmod, self.loopmod = self.load_model()
+            self.kin, self.paramsmod_NGC, self.linmod_NGC, self.loopmod_NGC, self.paramsmod_SGC, self.linmod_SGC, self.loopmod_SGC = self.load_model_NGC_SGC()
 
     def setup_pybird(self):
 
         from pybird_dev.pybird import Correlator
-        from pybird_dev.bird import Bird
 
         Nl = 3 if self.pardict["do_hex"] else 2
         optiresum = True if self.pardict["do_corr"] else False
         output = "bCf" if self.pardict["do_corr"] else "bPk"
         z_pk = float(self.pardict["z_pk"])
+        kmax = None if self.pardict["do_corr"] else 0.5
         correlator = Correlator()
 
         # Set up pybird
@@ -77,73 +79,67 @@ class BirdModel:
             {
                 "output": output,
                 "multipole": Nl,
-                "z": z_pk,
+                "z": float(self.pardict["z_pk"]),
                 "optiresum": optiresum,
                 "with_bias": False,
-                "with_exact_time": False,
-                "with_time": False,
-                "kmax": 0.5,
+                "with_nlo_bias": True,
+                "with_exact_time": True,
                 "with_AP": True,
+                "kmax": kmax,
                 "DA_AP": self.Da,
                 "H_AP": self.Hz,
             }
         )
 
-        correlator.read_cosmo({"k11": self.kmod, "P11": self.Pmod, "z": z_pk, "Omega0_m": self.Om})
+        return correlator
 
-        bird = Bird(
-            correlator.cosmo,
-            with_bias=correlator.config["with_bias"],
-            with_stoch=correlator.config["with_stoch"],
-            with_nlo_bias=correlator.config["with_nlo_bias"],
-            with_assembly_bias=correlator.config["with_assembly_bias"],
-            co=correlator.co,
-        )
-        correlator.nonlinear.PsCf(bird)
-        bird.setPsCfl()
+    def load_model_NGC_SGC(self): #+
+        kin_NGC, paramsmod_NGC, linmod_NGC, loopmod_NGC = self.load_model_individual(r"gridname_NGC", r"outgrid_NGC") #+
+        kin_SGC, paramsmod_SGC, linmod_SGC, loopmod_SGC = self.load_model_individual(r"gridname_SGC", r"outgrid_SGC") #+
+        return kin_NGC, paramsmod_NGC, linmod_NGC, loopmod_NGC, paramsmod_SGC, linmod_SGC, loopmod_SGC #+
 
-        return correlator, bird
-
-    def load_model(self):
+    def load_model_individual(self, gridname, outgrid):
 
         # Load in the model components
-        gridname = self.pardict["code"].lower() + "-" + self.pardict["gridname"]
+        gridname = self.pardict["code"].lower() + "-" + self.pardict[gridname]
         if self.pardict["taylor_order"]:
             if self.template:
                 paramsmod = None
                 if self.pardict["do_corr"]:
                     linmod = np.load(
-                        os.path.join(self.pardict["outgrid"], "DerClin_%s_template.npy" % gridname), allow_pickle=True,
+                        os.path.join(self.pardict[outgrid], "DerClin_%s_template.npy" % gridname), allow_pickle=True,
                     )
                     loopmod = np.load(
-                        os.path.join(self.pardict["outgrid"], "DerCloop_%s_template.npy" % gridname), allow_pickle=True,
+                        os.path.join(self.pardict[outgrid], "DerCloop_%s_template.npy" % gridname), allow_pickle=True,
                     )
                 else:
                     linmod = np.load(
-                        os.path.join(self.pardict["outgrid"], "DerPlin_%s_template.npy" % gridname), allow_pickle=True,
+                        os.path.join(self.pardict[outgrid], "DerPlin_%s_template.npy" % gridname), allow_pickle=True,
                     )
                     loopmod = np.load(
-                        os.path.join(self.pardict["outgrid"], "DerPloop_%s_template.npy" % gridname), allow_pickle=True,
+                        os.path.join(self.pardict[outgrid], "DerPloop_%s_template.npy" % gridname), allow_pickle=True,
                     )
             else:
                 paramsmod = np.load(
-                    os.path.join(self.pardict["outgrid"], "DerParams_%s.npy" % gridname), allow_pickle=True,
+                    os.path.join(self.pardict[outgrid], "DerParams_%s.npy" % gridname), allow_pickle=True,
                 )
                 if self.pardict["do_corr"]:
                     linmod = np.load(
-                        os.path.join(self.pardict["outgrid"], "DerClin_%s.npy" % gridname), allow_pickle=True,
+                        os.path.join(self.pardict[outgrid], "DerClin_%s.npy" % gridname), allow_pickle=True,
                     )
                     loopmod = np.load(
-                        os.path.join(self.pardict["outgrid"], "DerCloop_%s.npy" % gridname), allow_pickle=True,
+                        os.path.join(self.pardict[outgrid], "DerCloop_%s.npy" % gridname), allow_pickle=True,
                     )
                 else:
                     linmod = np.load(
-                        os.path.join(self.pardict["outgrid"], "DerPlin_%s.npy" % gridname), allow_pickle=True,
+                        os.path.join(self.pardict[outgrid], "DerPlin_%s.npy" % gridname), allow_pickle=True,
                     )
                     loopmod = np.load(
-                        os.path.join(self.pardict["outgrid"], "DerPloop_%s.npy" % gridname), allow_pickle=True,
+                        os.path.join(self.pardict[outgrid], "DerPloop_%s.npy" % gridname), allow_pickle=True,
                     )
             kin = linmod[0][0, :, 0]
+            #print("kin from load_model_individual")
+            #print(kin)
         else:
             if self.template:
                 lintab, looptab = get_template_grids(self.pardict, pad=False, cf=self.pardict["do_corr"])
@@ -160,92 +156,74 @@ class BirdModel:
 
     def compute_params(self, coords):
 
-        if self.pardict["taylor_order"]:
+    	if self.pardict["taylor_order"]:
             dtheta = np.array(coords) - self.valueref
             Params = get_ParamsTaylor(dtheta, self.paramsmod, self.pardict["taylor_order"])
-        else:
+    	else:
             Params = self.paramsmod(coords)[0]
 
-        return Params
+    	return Params
 
-    def compute_pk(self, coords):
+    def compute_pk_separategrids(self, coords):
+
+	#self.kin, self.paramsmod, self.linmod, self.loopmod = self.load_model()
+        self.kin, self.paramsmod_NGC, self.linmod_NGC, self.loopmod_NGC, self.paramsmod_SGC, self.linmod_SGC, self.loopmod_SGC = self.load_model_NGC_SGC()
 
         if self.pardict["taylor_order"]:
             dtheta = np.array(coords) - self.valueref
-            Plin = get_PSTaylor(dtheta, self.linmod, self.pardict["taylor_order"])
-            Ploop = get_PSTaylor(dtheta, self.loopmod, self.pardict["taylor_order"])
+            #Plin = get_PSTaylor(dtheta, self.linmod, self.pardict["taylor_order"])
+            #Ploop = get_PSTaylor(dtheta, self.loopmod, self.pardict["taylor_order"])
+            Plin_NGC = get_PSTaylor(dtheta, self.linmod_NGC, self.pardict["taylor_order"])
+            Ploop_NGC = get_PSTaylor(dtheta, self.loopmod_NGC, self.pardict["taylor_order"])
+            Plin_SGC = get_PSTaylor(dtheta, self.linmod_SGC, self.pardict["taylor_order"])
+            Ploop_SGC = get_PSTaylor(dtheta, self.loopmod_SGC, self.pardict["taylor_order"])
         else:
             Plin = self.linmod(coords)[0]
             Ploop = self.loopmod(coords)[0]
-        Plin = np.swapaxes(Plin, axis1=1, axis2=2)[:, 1:, :]
-        Ploop = np.swapaxes(Ploop, axis1=1, axis2=2)[:, 1:, :]
+        Plin_NGC = np.swapaxes(Plin_NGC, axis1=1, axis2=2)[:, 1:, :]
+        Ploop_NGC = np.swapaxes(Ploop_NGC, axis1=1, axis2=2)[:, 1:, :]
+        Plin_SGC = np.swapaxes(Plin_SGC, axis1=1, axis2=2)[:, 1:, :]
+        Ploop_SGC = np.swapaxes(Ploop_SGC, axis1=1, axis2=2)[:, 1:, :]
+
+        return Plin_NGC, Ploop_NGC, Plin_SGC, Ploop_SGC
+
+    def compute_model_direct(self, coords):
+
+        parameters = copy.deepcopy(self.pardict)
+
+        for k, var in enumerate(self.pardict["freepar"]):
+            parameters[var] = coords[k]
+        if parameters["code"] == "CAMB":
+            kin, Pin, Om, Da, Hz, fN, sigma8, sigma12, r_d = run_camb(parameters)
+        else:
+            kin, Pin, Om, Da, Hz, fN, sigma8, sigma12, r_d = run_class(parameters)
+
+        # Get non-linear power spectrum from pybird
+        self.correlator.compute(
+            {"k11": kin, "P11": Pin, "z": float(self.pardict["z_pk"]), "Omega0_m": Om, "f": fN, "DA": Da, "H": Hz}
+        )
+        Plin, Ploop = (
+            self.correlator.bird.formatTaylorCf() if self.pardict["do_corr"] else self.correlator.bird.formatTaylorPs()
+        )
+
+        Plin = np.swapaxes(Plin.reshape((3, Plin.shape[-2] // 3, Plin.shape[-1])), axis1=1, axis2=2)[:, 1:, :]
+        Ploop = np.swapaxes(Ploop.reshape((3, Ploop.shape[-2] // 3, Ploop.shape[-1])), axis1=1, axis2=2)[:, 1:, :]
 
         return Plin, Ploop
 
-    def compute_model_direct(self, coords, bs, x_data):
+    def compute_model_separategrids(self, cvals_NGC, cvals_SGC, plin_NGC, ploop_NGC, plin_SGC, ploop_SGC, x_data):
+        P_model_NGC, P_model_interp_NGC = self.compute_model_individual(cvals_NGC, plin_NGC, ploop_NGC, x_data)
+        P_model_SGC, P_model_interp_SGC = self.compute_model_individual(cvals_SGC, plin_SGC, ploop_SGC, x_data)
+        P_model = np.concatenate((P_model_NGC, P_model_SGC))
+        P_model_interp = np.concatenate((P_model_interp_NGC, P_model_interp_SGC))
+        return P_model, P_model_interp, P_model_NGC, P_model_interp_NGC, P_model_SGC, P_model_interp_SGC
 
-        bias = {"b1": bs[0], "b2": bs[1], "b3": bs[2], "b4": bs[3], "cct": bs[4], "cr1": bs[5], "cr2": bs[6]}
-        ce1, cemono, cequad = bs[-3:]
-        self.bird.f = coords[2]
-
-        if self.pardict["do_corr"]:
-            self.correlator.resum.PsCf(self.bird)
-            self.bird.setreduceCflb(bias)
-            self.correlator.projection.AP(bird=self.bird, q=coords[:2])
-            plin, ploop = self.bird.formatTaylorCf()
-            if self.pardict["do_hex"]:
-                P0, P2, P4 = self.bird.fullCf
-            else:
-                P0, P2 = self.bird.fullCf
-        else:
-            self.correlator.resum.Ps(self.bird)
-            self.bird.setreducePslb(bias)
-            self.correlator.projection.AP(bird=self.bird, q=coords[:2])
-            plin, ploop = self.bird.formatTaylorPs()
-            if self.pardict["do_hex"]:
-                P0, P2, P4 = self.bird.fullPs
-            else:
-                P0, P2 = self.bird.fullPs
-
-        P0_interp = sp.interpolate.splev(x_data[0], sp.interpolate.splrep(self.kin, P0))
-        P2_interp = sp.interpolate.splev(x_data[1], sp.interpolate.splrep(self.kin, P2))
-        if self.pardict["do_hex"]:
-            P4_interp = sp.interpolate.splev(x_data[2], sp.interpolate.splrep(self.kin, P4))
-
-        if self.pardict["do_corr"]:
-            C0 = np.exp(-self.k_m * x_data[0]) * self.k_m ** 2 / (4.0 * np.pi * x_data[0])
-            C1 = -self.k_m ** 2 * np.exp(-self.k_m * x_data[0]) / (4.0 * np.pi * x_data[0] ** 2)
-            C2 = (
-                np.exp(-self.k_m * x_data[1])
-                * (3.0 + 3.0 * self.k_m * x_data[1] + self.k_m ** 2 * x_data[1] ** 2)
-                / (4.0 * np.pi * x_data[1] ** 3)
-            )
-
-            P0_interp += ce1 * C0 + cemono * C1
-            P2_interp += cequad * C2
-        else:
-            P0_interp += ce1 + cemono * x_data[0] ** 2 / self.k_m ** 2
-            P2_interp += cequad * x_data[1] ** 2 / self.k_m ** 2
-
-        if self.pardict["do_hex"]:
-            P_model = np.concatenate([P0, P2, P4])
-            P_model_interp = np.concatenate([P0_interp, P2_interp, P4_interp])
-        else:
-            P_model = np.concatenate([P0, P2])
-            P_model_interp = np.concatenate([P0_interp, P2_interp])
-
-        ploop = ploop.reshape((3, ploop.shape[0] // 3, ploop.shape[1]))
-        ploop = np.swapaxes(ploop, axis1=1, axis2=2)[:, 1:, :]
-
-        return P_model, P_model_interp, ploop
-
-    def compute_model(self, cvals, plin, ploop, x_data):
+    def compute_model_individual(self, cvals, plin, ploop, x_data):
 
         plin0, plin2, plin4 = plin
         ploop0, ploop2, ploop4 = ploop
 
         b1, b2, b3, b4, cct, cr1, cr2, ce1, cemono, cequad, bnlo = cvals
-
 
         # the columns of the Ploop data files.
         cvals = np.array(
@@ -262,12 +240,12 @@ class BirdModel:
                 b2 * b2,
                 b2 * b4,
                 b4 * b4,
-                b1 * cct / self.k_nl ** 2,
-                b1 * cr1 / self.k_m ** 2,
-                b1 * cr2 / self.k_m ** 2,
-                cct / self.k_nl ** 2,
-                cr1 / self.k_m ** 2,
-                cr2 / self.k_m ** 2,
+                2.0 * b1 * cct / self.k_nl ** 2,
+                2.0 * b1 * cr1 / self.k_m ** 2,
+                2.0 * b1 * cr2 / self.k_m ** 2,
+                2.0 * cct / self.k_nl ** 2,
+                2.0 * cr1 / self.k_m ** 2,
+                2.0 * cr2 / self.k_m ** 2,
                 2.0 * b1 ** 2 * bnlo / self.k_m ** 4,
             ]
         )
@@ -305,17 +283,9 @@ class BirdModel:
             P_model_interp = np.concatenate([P0_interp, P2_interp])
 
         return P_model, P_model_interp
-    
-    def compute_model_NGCSGC(self, cvals_NGC, cvals_SGC, plin, ploop, x_data):
-        P_model_NGC, P_model_interp_NGC = self.compute_model(cvals_NGC, plin, ploop, x_data)
-        P_model_SGC, P_model_interp_SGC = self.compute_model(cvals_SGC, plin, ploop, x_data)
-        P_model = np.concatenate([P_model_NGC, P_model_SGC])
-        P_model_interp = np.concatenate([P_model_interp_NGC, P_model_interp_SGC])
-        #print("compute_model_NGCSGC running!")
-        #print(P_model_interp)
-        return P_model, P_model_interp
 
     def compute_chi2(self, P_model, Pi, data):
+
         if self.pardict["do_marg"]:
 
             Covbi = np.dot(Pi, np.dot(data["cov_inv"], Pi.T))
@@ -329,194 +299,31 @@ class BirdModel:
             )
             chi2mar = -np.dot(vectorbi, np.dot(Cinvbi, vectorbi)) + np.log(np.linalg.det(Covbi))
             chi_squared = chi2nomar + chi2mar
-            #print("chi_squared_nomar = %lf" %chi2nomar)
-            #print("chi_squared_mar = %lf" %chi2mar)
-            #print("chi_squared_total = %lf" %chi_squared)
 
         else:
 
             # Compute the chi_squared
             chi_squared = 0.0
-            fit_data = np.concatenate((data["fit_data_NGC"], data["fit_data_SGC"]))
-            for i in range(len(fit_data)):
-                chi_squared += (P_model[i] - fit_data[i]) * np.sum(
-                    data["cov_inv"][i, 0:] * (P_model - fit_data)
+            for i in range(len(data["fit_data_combined"])):
+                chi_squared += (P_model[i] - data["fit_data_combined"][i]) * np.sum(
+                    data["cov_inv"][i, 0:] * (P_model - data["fit_data_combined"])
                 )
 
         return chi_squared
 
-    # Ignore names, works for both power spectrum and correlation function
-    def get_Pi_for_marg_NGCSGC(self, ploop, b1_NGC, b1_SGC, NGC_shot_noise, SGC_shot_noise, x_data):
-
-        if self.pardict["do_marg"]:
-
-            ploop0, ploop2, ploop4 = ploop
-            #print("get_Pi_for_marg ploop shape = %lf" %(len(ploop0)))
-            #print("passed ploop0:")
-            #print(ploop0)
-            #print("ploop0 length = %lf" %len(ploop0))
-
-            Pb3_NGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, ploop0[3] + b1_NGC * ploop0[7])),
-                    splev(x_data[1], splrep(self.kin, ploop2[3] + b1_NGC * ploop2[7])),
-                ]
-            )
-            Pcct_NGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, ploop0[15] + b1_NGC * ploop0[12])),
-                    splev(x_data[1], splrep(self.kin, ploop2[15] + b1_NGC * ploop2[12])),
-                ]
-            )
-            Pcr1_NGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, ploop0[16] + b1_NGC * ploop0[13])),
-                    splev(x_data[1], splrep(self.kin, ploop2[16] + b1_NGC * ploop2[13])),
-                ]
-            )
-            Pcr2_NGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, ploop0[17] + b1_NGC * ploop0[14])),
-                    splev(x_data[1], splrep(self.kin, ploop2[17] + b1_NGC * ploop2[14])),
-                ]
-            )
-            Pnlo_NGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, b1_NGC ** 2 * ploop0[18])),
-                    splev(x_data[1], splrep(self.kin, b1_NGC ** 2 * ploop2[18])),
-                ]
-            )
-            
-            
-            
-            Pb3_SGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, ploop0[3] + b1_SGC * ploop0[7])),
-                    splev(x_data[1], splrep(self.kin, ploop2[3] + b1_SGC * ploop2[7])),
-                ]
-            )
-            Pcct_SGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, ploop0[15] + b1_SGC * ploop0[12])),
-                    splev(x_data[1], splrep(self.kin, ploop2[15] + b1_SGC * ploop2[12])),
-                ]
-            )
-            Pcr1_SGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, ploop0[16] + b1_SGC * ploop0[13])),
-                    splev(x_data[1], splrep(self.kin, ploop2[16] + b1_SGC * ploop2[13])),
-                ]
-            )
-            Pcr2_SGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, ploop0[17] + b1_SGC * ploop0[14])),
-                    splev(x_data[1], splrep(self.kin, ploop2[17] + b1_SGC * ploop2[14])),
-                ]
-            )
-            Pnlo_SGC = np.concatenate(
-                [
-                    splev(x_data[0], splrep(self.kin, b1_SGC ** 2 * ploop0[18])),
-                    splev(x_data[1], splrep(self.kin, b1_SGC ** 2 * ploop2[18])),
-                ]
-            )
-
-            if self.pardict["do_hex"]:
-
-                Pb3_NGC = np.concatenate([Pb3_NGC, splev(x_data[2], splrep(self.kin, ploop4[3] + b1_NGC * ploop4[7]))])
-                Pcct_NGC = np.concatenate([Pcct_NGC, splev(x_data[2], splrep(self.kin, ploop4[15] + b1_NGC * ploop4[12]))])
-                Pcr1_NGC = np.concatenate([Pcr1_NGC, splev(x_data[2], splrep(self.kin, ploop4[16] + b1_NGC * ploop4[13]))])
-                Pcr2_NGC = np.concatenate([Pcr2_NGC, splev(x_data[2], splrep(self.kin, ploop4[17] + b1_NGC * ploop4[14]))])
-                Pnlo_NGC = np.concatenate([Pnlo_NGC, splev(x_data[2], splrep(self.kin, b1_NGC ** 2 * ploop4[18]))])
-
-                Pb3_SGC = np.concatenate([Pb3_SGC, splev(x_data[2], splrep(self.kin, ploop4[3] + b1_SGC * ploop4[7]))])
-                Pcct_SGC = np.concatenate([Pcct_SGC, splev(x_data[2], splrep(self.kin, ploop4[15] + b1_SGC * ploop4[12]))])
-                Pcr1_SGC = np.concatenate([Pcr1_SGC, splev(x_data[2], splrep(self.kin, ploop4[16] + b1_SGC * ploop4[13]))])
-                Pcr2_SGC = np.concatenate([Pcr2_SGC, splev(x_data[2], splrep(self.kin, ploop4[17] + b1_SGC * ploop4[14]))])
-                Pnlo_SGC = np.concatenate([Pnlo_SGC, splev(x_data[2], splrep(self.kin, b1_SGC ** 2 * ploop4[18]))])
-
-            if self.pardict["do_corr"]:
-
-                C0 = np.concatenate(
-                    [np.exp(-self.k_m * x_data[0]) / (4.0 * np.pi * x_data[0]), np.zeros(len(x_data[1]))]
-                )  # shot-noise mono
-                C1 = np.concatenate(
-                    [-np.exp(-self.k_m * x_data[0]) / (4.0 * np.pi * x_data[0] ** 2), np.zeros(len(x_data[1]))]
-                )  # k^2 mono
-                C2 = np.concatenate(
-                    [
-                        np.zeros(len(x_data[0])),
-                        np.exp(-self.k_m * x_data[1])
-                        * (3.0 + 3.0 * self.k_m * x_data[1] + self.k_m ** 2 * x_data[1] ** 2)
-                        / (4.0 * np.pi * x_data[1] ** 3),
-                    ]
-                )  # k^2 quad
-
-                if self.pardict["do_hex"]:
-                    C0 = np.concatenate([C0, np.zeros(len(x_data[2]))])  # shot-noise mono
-                    C1 = np.concatenate([C1, np.zeros(len(x_data[2]))])  # k^2 mono
-                    C2 = np.concatenate([C2, np.zeros(len(x_data[2]))])  # k^2 quad
-
-                Pi = np.array(
-                    [
-                        Pb3_NGC,  # *b3
-                        2.0 * Pcct_NGC / self.k_nl ** 2,  # *cct
-                        2.0 * Pcr1_NGC / self.k_m ** 2,  # *cr1
-                        2.0 * Pcr2_NGC / self.k_m ** 2,  # *cr2
-                        C0 * self.k_m ** 2 * NGC_shot_noise,  # ce1
-                        C1 * self.k_m ** 2 * NGC_shot_noise,  # cemono
-                        C2 * NGC_shot_noise,  # cequad
-                        2.0 * Pnlo_NGC / self.k_m ** 4,  # bnlo
-                    ]
-                )
-
-            else:
-
-                Onel0 = np.concatenate([np.ones(len(x_data[0])), np.zeros(len(x_data[1]))])  # shot-noise mono
-                kl0 = np.concatenate([x_data[0], np.zeros(len(x_data[1]))])  # k^2 mono
-                kl2 = np.concatenate([np.zeros(len(x_data[0])), x_data[1]])  # k^2 quad
-
-                if self.pardict["do_hex"]:
-                    Onel0 = np.concatenate([Onel0, np.zeros(len(x_data[2]))])  # shot-noise mono
-                    kl0 = np.concatenate([kl0, np.zeros(len(x_data[2]))])  # k^2 mono
-                    kl2 = np.concatenate([kl2, np.zeros(len(x_data[2]))])  # k^2 quad
-                zeros = np.zeros((8, (len(x_data[0]) + len(x_data[1]))))
-                Pi_NGC = np.array(
-                    [
-                        Pb3_NGC,  # *b3
-                        2.0 * Pcct_NGC / self.k_nl ** 2,  # *cct
-                        2.0 * Pcr1_NGC / self.k_m ** 2,  # *cr1
-                        2.0 * Pcr2_NGC / self.k_m ** 2,  # *cr2
-                        Onel0 * NGC_shot_noise,  # *ce1 *ce1 #Returns shot_noise, with no SGC shot noise?
-                        kl0 ** 2 / self.k_m ** 2 * NGC_shot_noise,  # *cemono
-                        kl2 ** 2 / self.k_m ** 2 * NGC_shot_noise,  # *cequad
-                        2.0 * Pnlo_NGC / self.k_m ** 4,  # bnlo]
-                    ])
-                Pi_NGC_concatenated = np.concatenate((Pi_NGC, zeros), axis=0)
-
-                Pi_SGC = np.array(
-                    [
-                        Pb3_SGC,  # *b3
-                        2.0 * Pcct_SGC / self.k_nl ** 2,  # *cct
-                        2.0 * Pcr1_SGC / self.k_m ** 2,  # *cr1
-                        2.0 * Pcr2_SGC / self.k_m ** 2,  # *cr2
-                        Onel0 * SGC_shot_noise,  # *ce1
-                        kl0 ** 2 / self.k_m ** 2 * SGC_shot_noise,  # *cemono
-                        kl2 ** 2 / self.k_m ** 2 * SGC_shot_noise,  # *cequad
-                        2.0 * Pnlo_SGC / self.k_m ** 4,  # bnlo
-                    ])
-                Pi_SGC_concatenated = np.concatenate((zeros, Pi_SGC), axis=0)
-                Pi = np.hstack((Pi_NGC_concatenated, Pi_SGC_concatenated))
-                np.savetxt("Pi_printed.txt", Pi)
-                
-                #Alternate Attempt:
-        else:
-
-            Pi = None
-
-        return Pi
+    def get_Pi_for_marg_separategrids(self, ploop_NGC, ploop_SGC, b1_NGC, b1_SGC, shot_noise_NGC, shot_noise_SGC, x_data):
+        Pi_NGC = self.get_Pi_for_marg_individual(ploop_NGC, b1_NGC, shot_noise_NGC, x_data)
+        Pi_SGC = self.get_Pi_for_marg_individual(ploop_SGC, b1_SGC, shot_noise_SGC, x_data)
+        #print(len(x_data[0]), len(x_data[1]))
+        #print(ploop_NGC)
+        zeros = np.zeros((8, (len(x_data[0]) + len(x_data[1]))))
+        Pi_NGC_concatenated = np.concatenate((Pi_NGC, zeros), axis=0)
+        Pi_SGC_concatenated = np.concatenate((zeros, Pi_SGC), axis=0)
+        Pi = np.hstack((Pi_NGC_concatenated, Pi_SGC_concatenated))
+        return Pi_NGC, Pi_SGC, Pi
 
     # Ignore names, works for both power spectrum and correlation function
-    def get_Pi_for_marg(self, ploop, b1, shot_noise, x_data):
+    def get_Pi_for_marg_individual(self, ploop, b1, shot_noise, x_data):
 
         if self.pardict["do_marg"]:
 
@@ -625,75 +432,77 @@ class BirdModel:
             Pi = None
 
         return Pi
-    
-    #def get_Pi_for_marg_NGCSGC(self, ploop, b1_NGC, b1_SGC, NGC_shot_noise, SGC_shot_noise, x_data):
-        
 
-    def compute_bestfit_analytic(self, Pi, data):
+    def compute_bestfit_analytic(self, Pi, data, model):
 
         Covbi = np.dot(Pi, np.dot(data["cov_inv"], Pi.T))
         Covbi += self.priormat
         Cinvbi = np.linalg.inv(Covbi)
-        fitting_data_NGC = data["fit_data_NGC"]
-        fitting_data_SGC = data["fit_data_SGC"]
-        fitting_data = np.concatenate((fitting_data_NGC, fitting_data_SGC))
-        #vectorbi = Pi @ data["cov_inv"] @ data["fit_data"]
-        vectorbi = Pi @ data["cov_inv"] @ fitting_data
+        vectorbi = Pi @ data["cov_inv"] @ (data["fit_data_combined"] - model)
 
         return Cinvbi @ vectorbi
 
-    def get_components(self, coords, cvals, shotnoise=None):
+    def get_components(self, coords, cvals):
 
-        plin, ploop = self.compute_pk(coords)
-
-        if self.pardict["do_hex"]:
-            plin0, plin2 = plin
-            ploop0, ploop2 = ploop
+        if self.direct:
+            plin, ploop = self.compute_model_direct(coords)
         else:
-            plin0, plin2, plin4 = plin
-            ploop0, ploop2, ploop4 = ploop
+            plin, ploop = self.compute_pk(coords)
 
-        if self.pardict["do_corr"]:
-            b1, b2, b3, b4, cct, cr1, cr2 = cvals
-        else:
-            b1, b2, b3, b4, cct, cr1, cr2, ce1, cemono, cequad = cvals
+        plin0, plin2, plin4 = plin
+        ploop0, ploop2, ploop4 = ploop
+
+        b1, b2, b3, b4, cct, cr1, cr2, ce1, cemono, cequad, bnlo = cvals
 
         # the columns of the Ploop data files.
         cloop = np.array([1, b1, b2, b3, b4, b1 * b1, b1 * b2, b1 * b3, b1 * b4, b2 * b2, b2 * b4, b4 * b4])
         cvalsct = np.array(
             [
-                b1 * cct / self.k_nl ** 2,
-                b1 * cr1 / self.k_m ** 2,
-                b1 * cr2 / self.k_m ** 2,
-                cct / self.k_nl ** 2,
-                cr1 / self.k_m ** 2,
-                cr2 / self.k_m ** 2,
+                2.0 * b1 * cct / self.k_nl ** 2,
+                2.0 * b1 * cr1 / self.k_m ** 2,
+                2.0 * b1 * cr2 / self.k_m ** 2,
+                2.0 * cct / self.k_nl ** 2,
+                2.0 * cr1 / self.k_m ** 2,
+                2.0 * cr2 / self.k_m ** 2,
             ]
         )
+        cnlo = 2.0 * b1 ** 2 * bnlo / self.k_m ** 4
 
         P0lin = plin0[0] + b1 * plin0[1] + b1 * b1 * plin0[2]
         P2lin = plin2[0] + b1 * plin2[1] + b1 * b1 * plin2[2]
         P0loop = np.dot(cloop, ploop0[:12, :])
         P2loop = np.dot(cloop, ploop2[:12, :])
-        P0ct = np.dot(cvalsct, ploop0[12:, :])
-        P2ct = np.dot(cvalsct, ploop2[12:, :])
+        P0ct = np.dot(cvalsct, ploop0[12:-1, :])
+        P2ct = np.dot(cvalsct, ploop2[12:-1, :])
+        P0nlo = cnlo * ploop0[-1, :]
+        P2nlo = cnlo * ploop2[-1, :]
         if self.pardict["do_hex"]:
             P4lin = plin4[0] + b1 * plin4[1] + b1 * b1 * plin4[2]
             P4loop = np.dot(cloop, ploop4[:12, :])
-            P4ct = np.dot(cvalsct, ploop4[12:, :])
+            P4ct = np.dot(cvalsct, ploop4[12:-1, :])
+            P4nlo = cnlo * ploop4[-1, :]
             Plin = [P0lin, P2lin, P4lin]
-            Ploop = [P0loop, P2loop, P4loop]
+            Ploop = [P0loop + P0nlo, P2loop + P2nlo, P4loop + P4nlo]
             Pct = [P0ct, P2ct, P4ct]
         else:
             Plin = [P0lin, P2lin]
-            Ploop = [P0loop, P2loop]
+            Ploop = [P0loop + P0nlo, P2loop + P2nlo]
             Pct = [P0ct, P2ct]
 
         if self.pardict["do_corr"]:
-            P0st, P2st, P4st = None, None, None
+            C0 = np.exp(-self.k_m * self.kin) * self.k_m ** 2 / (4.0 * np.pi * self.kin)
+            C1 = -self.k_m ** 2 * np.exp(-self.k_m * self.kin) / (4.0 * np.pi * self.kin ** 2)
+            C2 = (
+                np.exp(-self.k_m * self.kin)
+                * (3.0 + 3.0 * self.k_m * self.kin + self.k_m ** 2 * self.kin ** 2)
+                / (4.0 * np.pi * self.kin ** 3)
+            )
+            P0st = ce1 * C0 + cemono * C1
+            P2st = cequad * C2
+            P4st = np.zeros(len(self.kin))
         else:
-            P0st = ce1 * shotnoise + cemono * shotnoise * self.kin ** 2 / self.k_m ** 2
-            P2st = cequad * shotnoise * self.kin ** 2 / self.k_m ** 2
+            P0st = ce1 + cemono * self.kin ** 2 / self.k_m ** 2
+            P2st = cequad * self.kin ** 2 / self.k_m ** 2
             P4st = np.zeros(len(self.kin))
         if self.pardict["do_hex"]:
             Pst = [P0st, P2st, P4st]
@@ -704,12 +513,14 @@ class BirdModel:
 
 
 # Holds all the data in a convenient dictionary
-class FittingData_NGCSGC:
-    def __init__(self, pardict_NGC, pardict_SGC, shot_noise_NGC=0.0, shot_noise_SGC=0.0):
+class FittingData_NGC_SGC:
+    def __init__(self, pardict_NGC, pardict_SGC, NGC_shot_noise, SGC_shot_noise):
 
-        x_data, fit_data_NGC, fit_data_SGC, cov, cov_inv, chi2data, invcovdata, fitmask_NGC, fitmask_SGC = self.read_data(pardict_NGC, pardict_SGC)
+        x_data, fit_data_combined, fit_data_NGC, fit_data_SGC, cov, cov_inv, chi2data, invcovdata, fitmask_NGC, fitmask_SGC = self.read_data(pardict_NGC, pardict_SGC)
+
         self.data = {
             "x_data": x_data,
+            "fit_data_combined": fit_data_combined,
             "fit_data_NGC": fit_data_NGC,
             "fit_data_SGC": fit_data_SGC,
             "cov": cov,
@@ -718,8 +529,8 @@ class FittingData_NGCSGC:
             "invcovdata": invcovdata,
             "fitmask_NGC": fitmask_NGC,
             "fitmask_SGC": fitmask_SGC,
-            "shot_noise_NGC": shot_noise_NGC,
-            "shot_noise_SGC": shot_noise_SGC,
+            "shot_noise_NGC": SGC_shot_noise,
+            "shot_noise_SGC": SGC_shot_noise,
         }
 
         # Check covariance matrix is symmetric and positive-definite by trying to do a cholesky decomposition
@@ -733,6 +544,7 @@ class FittingData_NGCSGC:
         except:
             print("Error: Covariance matrix not positive-definite!")
             exit(0)
+
     def read_pk_single(self, inputfile, step_size, skiprows):
 
         dataframe = pd.read_csv(
@@ -740,17 +552,15 @@ class FittingData_NGCSGC:
             comment="#",
             skiprows=skiprows,
             delim_whitespace=True,
-            #names=["k", "pk0", "pk1", "pk2", "pk3", "pk4", "nk"], #original, not the format of my data
-            #names = ["k_mean", "k", "pk0", "pk2", "pk4"] #When including Hexadecapole, turned off for CMASS NGC D'Amico test
-            #names = ["k", "pk0", "pk2"] #Reformat of Hector's provided Model Pk
-            names = ["k", "k_mean", "pk0", "pk2", "nk"] #Reformat of Hector's provided Model Pk w/ hexadecapole
+            names=["k", "k_mean", "pk0", "pk2", "pk4", "nk"], #format of my power spectra
+            #names = ["n","k","k_mean","pk0","pk2","pk4","sigma_lin_pk","nk"],#format of mock mean
         )
         k = dataframe["k"].values
         if step_size == 1:
             k_rebinned = k
             pk0_rebinned = dataframe["pk0"].values
             pk2_rebinned = dataframe["pk2"].values
-            #pk4_rebinned = dataframe["pk4"].values #REMOVED FOR DAMICO TEST
+            pk4_rebinned = dataframe["pk4"].values
         else:
             add = k.size % step_size
             weight = dataframe["nk"].values
@@ -763,59 +573,37 @@ class FittingData_NGCSGC:
                 dataframe["pk2"].values = np.concatenate(
                     (dataframe["pk2"].values, [dataframe["pk2"].values[-1]] * to_add)
                 )
-             #   dataframe["pk4"].values = np.concatenate(
-             #       (dataframe["pk4"].values, [dataframe["pk4"].values[-1]] * to_add) #REMOVED FOR DAMICO TEST
-             #   )
+                dataframe["pk4"].values = np.concatenate(
+                    (dataframe["pk4"].values, [dataframe["pk4"].values[-1]] * to_add)
+                )
                 weight = np.concatenate((weight, [0] * to_add))
             k = k.reshape((-1, step_size))
             pk0 = (dataframe["pk0"].values).reshape((-1, step_size))
             pk2 = (dataframe["pk2"].values).reshape((-1, step_size))
-            #pk4 = (dataframe["pk4"].values).reshape((-1, step_size)) #REMOVED FOR DAMICO TEST
+            pk4 = (dataframe["pk4"].values).reshape((-1, step_size))
             weight = weight.reshape((-1, step_size))
             # Take the average of every group of step_size rows to rebin
             k_rebinned = np.average(k, axis=1)
             pk0_rebinned = np.average(pk0, axis=1, weights=weight)
             pk2_rebinned = np.average(pk2, axis=1, weights=weight)
-            #pk4_rebinned = np.average(pk4, axis=1, weights=weight) #REMOVED FOR DAMICO TEST
+            pk4_rebinned = np.average(pk4, axis=1, weights=weight)
 
+        #return np.vstack([k_rebinned, pk0_rebinned, pk2_rebinned, pk4_rebinned]).T
         return np.vstack([k_rebinned, pk0_rebinned, pk2_rebinned]).T
-        #print(np.vstack([k_rebinned, pk0_rebinned, pk2_rebinned]).T)
-        #return np.vstack([k_rebinned, pk0_rebinned, pk2_rebinned]).T
-        
+
     def read_pk(self, inputfile_NGC, inputfile_SGC, step_size, skiprows):
         read_pk_NGC = self.read_pk_single(inputfile_NGC, step_size, skiprows)
         read_pk_SGC = self.read_pk_single(inputfile_SGC, step_size, skiprows)
         print("NGC =")
         print(read_pk_NGC)
         print("SGC =")
-        print(read_pk_NGC[:, 1])
-        print(read_pk_NGC[:, 1])
+        print(read_pk_SGC)
         pk_NGC_SGC = np.vstack((read_pk_NGC[:, 0], read_pk_NGC[:, 1], read_pk_NGC[:, 2], read_pk_SGC[:, 1], read_pk_SGC[:, 2])).T
         print("pk_NGC_SGC")
         print(pk_NGC_SGC)
         return read_pk_NGC, read_pk_SGC, pk_NGC_SGC
-        
-        
+
     def read_data(self, pardict_NGC, pardict_SGC):
-
-        """# Read in the first mock to allocate the arrays
-        skiprows = 0
-        nmocks = 1000
-        inputbase = "/Volumes/Work/UQ/DESI/MockChallenge/Pre_recon_Stage2/input_data/EZmock_xil_v2"
-        inputfile = str("%s/2PCF_20200514-unit-elg-3gpc-001.dat" % inputbase)
-        data = np.array(pd.read_csv(inputfile, delim_whitespace=True, dtype=float, header=None, skiprows=skiprows))
-        sdata = data[:, 0]
-
-        xi = np.empty((nmocks, 4 * len(sdata)))
-        for i in range(nmocks):
-            inputfile = str("%s/2PCF_20200514-unit-elg-3gpc-%.3d.dat" % (inputbase, i))
-            data = np.array(pd.read_csv(inputfile, delim_whitespace=True, dtype=float, header=None, skiprows=skiprows))
-            xi[i] = np.concatenate([data[:, 0], data[:, 1], data[:, 2], data[:, 3]])
-
-        data = np.mean(xi, axis=0)
-        data = data.reshape((4, len(sdata))).T
-        cov_input = np.cov(xi[:, len(data[:, 0]) :].T)
-        print(cov_input)"""
 
         # Read in the data
         print(pardict_NGC["datafile"])
@@ -891,7 +679,6 @@ class FittingData_NGCSGC:
         # 9  | 10 | 11 | 12
         # 13 | 14 | 15 | 16
         
-        
         cov[:nx0, :nx0] = cov_input[mask0_NGC, mask0_NGC.T] # 1
         cov[:nx0, nx0 : nx0 + nx2] = cov_input[mask0_NGC, nin + mask2_NGC.T] #2
         cov[:nx0, nx0+nx2 : nx0+nx2+nx0] = cov_input[mask0_NGC, 2*nin + mask0_SGC.T] #3
@@ -933,13 +720,11 @@ class FittingData_NGCSGC:
 
         chi2data = np.dot(fit_data, np.dot(cov_inv, fit_data))
         invcovdata = np.dot(fit_data, cov_inv)
-        #np.savetxt("cov_input.txt", cov_input)
-        #np.savetxt("cov_mask.txt", cov)
-        #print("chi2data = %lf" %chi2data)
+        np.savetxt("cov_input.txt", cov_input)
+        np.savetxt("cov_mask.txt", cov)
+        print("chi2data = %lf" %chi2data)
 
-        return x_data_NGC, fit_data_NGC, fit_data_SGC, cov, cov_inv, chi2data, invcovdata, fitmask_NGC, fitmask_SGC
-
-
+        return x_data_NGC, fit_data, fit_data_NGC, fit_data_SGC, cov, cov_inv, chi2data, invcovdata, fitmask_NGC, fitmask_SGC
     def read_data_original(self, pardict):
 
         """# Read in the first mock to allocate the arrays
@@ -966,9 +751,8 @@ class FittingData_NGCSGC:
         if pardict["do_corr"]:
             data = np.array(pd.read_csv(pardict["datafile"], delim_whitespace=True, header=None))
         else:
-            #data = self.read_pk(pardict["datafile"], 1, 10) #Original- skips the first 10 lines of DESI stage 2 data
-            data = self.read_pk(pardict["datafile"], 1, 0)
-            #print(data)
+            #data = self.read_pk(pardict["datafile"], 1, 10)
+            data = self.read_pk(pardict["datafile"], 1, 0) #no need to skip lines
 
         x_data = data[:, 0]
         fitmask = [
@@ -987,15 +771,18 @@ class FittingData_NGCSGC:
             fit_data = np.concatenate([data[fitmask[0], 1], data[fitmask[1], 2], data[fitmask[2], 3]])
         else:
             fit_data = np.concatenate([data[fitmask[0], 1], data[fitmask[1], 2]])
-        #print(fit_data)
 
         # Read in, reshape and mask the covariance matrix
-        cov_flat = np.array(pd.read_csv(pardict["covfile"], delim_whitespace=True, header=None)) #ORIGINAL COV MATRIX FLAT
-        cov_flat = cov_flat.flatten() #SO I TRY FLATTENING MINE
-        nin = len(data[:, 0])
-        #cov_input = cov_flat[:, 2].reshape((3 * nin, 3 * nin)) #ORIGINAL HAD TWO COLUMNS, MY FLATTENED GRID DOES NOT
-        #cov_input = cov_flat.reshape((3 * nin, 3 * nin)) #Only for mono+quad+hex
-        cov_input = cov_flat.reshape((2 * nin, 2 * nin)) #Only for mono+quad
+        #cov_flat = np.array(pd.read_csv(pardict["covfile"], delim_whitespace=True, header=None))
+        #nin = len(data[:, 0])
+        #cov_input = cov_flat[:, 2].reshape((3 * nin, 3 * nin))
+
+        cov_input = np.array(pd.read_csv(pardict["covfile"], delim_whitespace=True, header=None)) #+
+        np.savetxt("cov_input_imshow.txt", cov_input)
+        #cov_flat = cov_flat.flatten() #+
+        nin = len(data[:, 0]) #+
+        print(nin)
+
         nx0, nx2 = len(x_data[0]), len(x_data[1])
         nx4 = len(x_data[2]) if pardict["do_hex"] else 0
         mask0, mask2, mask4 = fitmask[0][:, None], fitmask[1][:, None], fitmask[2][:, None]
@@ -1004,7 +791,6 @@ class FittingData_NGCSGC:
         cov[:nx0, nx0 : nx0 + nx2] = cov_input[mask0, nin + mask2.T]
         cov[nx0 : nx0 + nx2, :nx0] = cov_input[nin + mask2, mask0.T]
         cov[nx0 : nx0 + nx2, nx0 : nx0 + nx2] = cov_input[nin + mask2, nin + mask2.T]
-        
         if pardict["do_hex"]:
             cov[:nx0, nx0 + nx2 :] = cov_input[mask0, 2 * nin + mask4.T]
             cov[nx0 + nx2 :, :nx0] = cov_input[2 * nin + mask4, mask0.T]
@@ -1013,24 +799,18 @@ class FittingData_NGCSGC:
             cov[nx0 + nx2 :, nx0 + nx2 :] = cov_input[2 * nin + mask4, 2 * nin + mask4.T]
 
         # Invert the covariance matrix
-        #identity = np.eye(nx0 + nx2 + nx4) #testing changing this for mono+quad only?
-        identity = np.eye(nx0 + nx2 + nx4) 
-        print("Cov:")
-        print(cov)
-        print("Identity:")
-        print(nx2)
+        identity = np.eye(nx0 + nx2 + nx4)
         cov_lu, pivots, cov_inv, info = lapack.dgesv(cov, identity)
 
         chi2data = np.dot(fit_data, np.dot(cov_inv, fit_data))
         invcovdata = np.dot(fit_data, cov_inv)
 
         return x_data, fit_data, cov, cov_inv, chi2data, invcovdata, fitmask
-        
 
-def create_plot_combined(pardict_NGC, pardict_SGC, fittingdata):
+def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
 
     if pardict_NGC["do_hex"]:
-        x_data = fittingdata.data["x_data"]
+        x_data = fittingdata.data["x_data_NGC"] #Only want to use 1 range to define nx0, nx2
         nx0, nx2, nx4 = len(x_data[0]), len(x_data[1]), len(x_data[2])
         print("nx0 = %lf" %nx0)
     else:
@@ -1042,15 +822,15 @@ def create_plot_combined(pardict_NGC, pardict_SGC, fittingdata):
     cov = fittingdata.data["cov"]
 
     plt_data_NGC = (
-        np.concatenate(x_data) ** 2 * fit_data_NGC if pardict_NGC["do_corr"] else np.concatenate(x_data) ** 1.5 * fit_data_NGC 
+        np.concatenate(x_data) ** 2 * fit_data_NGC if pardict_NGC["do_corr"] else np.concatenate(x_data) * fit_data_NGC 
     )
     plt_data_SGC = (
-        np.concatenate(x_data) ** 2 * fit_data_SGC if pardict_SGC["do_corr"] else np.concatenate(x_data) ** 1.5 * fit_data_SGC 
+        np.concatenate(x_data) ** 2 * fit_data_SGC if pardict_SGC["do_corr"] else np.concatenate(x_data) * fit_data_SGC 
     )
     if pardict_NGC["do_corr"]:
         plt_err = np.concatenate(x_data) ** 2 * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx4)])
     else:
-        plt_err = np.concatenate((x_data, x_data)) ** 1.5 * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx0 + nx2)]) #errors fold in nx0, nx2, nx0, nx2
+        plt_err = np.concatenate((x_data, x_data)).flatten() * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx0 + nx2)])
 
 #NGC Monopole + Quadrupole
     plt.errorbar(
@@ -1058,9 +838,9 @@ def create_plot_combined(pardict_NGC, pardict_SGC, fittingdata):
         plt_data_NGC[:nx0],
         yerr=plt_err[:nx0],
         marker="o",
-        markerfacecolor="r",
-        markeredgecolor="k",
-        color="r",
+        markerfacecolor=colours[0],
+        markeredgecolor=colours[0],
+        color=colours[0],
         linestyle="None",
         markeredgewidth=1.3,
         zorder=5,
@@ -1070,23 +850,23 @@ def create_plot_combined(pardict_NGC, pardict_SGC, fittingdata):
         plt_data_NGC[nx0 : nx0 + nx2],
         yerr=plt_err[nx0 : nx0 + nx2],
         marker="o",
-        markerfacecolor="b",
-        markeredgecolor="k",
-        color="b",
+        markerfacecolor=colours[1],
+        markeredgecolor=colours[1],
+        color=colours[1],
         linestyle="None",
         markeredgewidth=1.3,
         zorder=5,
     )
     
-#SGC Monopole + Quadrupole (just reusing NGC errors, but oh well) 
+#SGC Monopole + Quadrupole (using distinct NGC/SGC errors from combined cov_matrix) 
     plt.errorbar(
         x_data[0],
         plt_data_SGC[:nx0],
         yerr=plt_err[nx0 + nx2 : nx0 + nx2 + nx0],
         marker="o",
-        markerfacecolor="black",
-        markeredgecolor="k",
-        color="r",
+        markerfacecolor=colours[2],
+        markeredgecolor=colours[2],
+        color=colours[2],
         linestyle="None",
         markeredgewidth=1.3,
         zorder=5,
@@ -1094,11 +874,11 @@ def create_plot_combined(pardict_NGC, pardict_SGC, fittingdata):
     plt.errorbar(
         x_data[1],
         plt_data_SGC[nx0 : nx0 + nx2],
-        yerr=plt_err[nx0 + nx2 + nx0:],
+        yerr=plt_err[nx0 + nx0 + nx2 : nx0 + nx2 + nx0 + nx2],
         marker="o",
-        markerfacecolor="yellow",
-        markeredgecolor="k",
-        color="b",
+        markerfacecolor=colours[3],
+        markeredgecolor=colours[3],
+        color=colours[3],
         linestyle="None",
         markeredgewidth=1.3,
         zorder=5,
@@ -1119,12 +899,13 @@ def create_plot_combined(pardict_NGC, pardict_SGC, fittingdata):
         )
 
     plt.xlim(0.0, np.amax(pardict_NGC["xfit_max"]) * 1.05)
+    plt.ylim(100, 2000)
     if pardict_NGC["do_corr"]:
         plt.xlabel(r"$s\,(h^{-1}\,\mathrm{Mpc})$", fontsize=16)
         plt.ylabel(r"$s^{2}\xi(s)$", fontsize=16, labelpad=5)
     else:
         plt.xlabel(r"$k\,(h\,\mathrm{Mpc}^{-1})$", fontsize=16)
-        plt.ylabel(r"$k^{3/2}P(k)\,(h^{-3/2}\,\mathrm{Mpc}^{3/2})$", fontsize=16, labelpad=5)
+        plt.ylabel(r"$kP(k)\,(h^{-1}\,\mathrm{Mpc})$", fontsize=16, labelpad=5)
     plt.tick_params(width=1.3)
     plt.tick_params("both", length=10, which="major")
     plt.tick_params("both", length=5, which="minor")
@@ -1140,25 +921,106 @@ def create_plot_combined(pardict_NGC, pardict_SGC, fittingdata):
 
     return plt
 
-def update_plot(pardict, x_data, P_model, plt, keep=False):
+def create_plot(pardict, fittingdata):
 
+    if pardict["do_hex"]:
+        x_data = fittingdata.data["x_data"]
+        nx0, nx2, nx4 = len(x_data[0]), len(x_data[1]), len(x_data[2])
+    else:
+        x_data = fittingdata.data["x_data"][:2]
+        nx0, nx2, nx4 = len(x_data[0]), len(x_data[1]), 0
+    fit_data = fittingdata.data["fit_data"]
+    cov = fittingdata.data["cov"]
+
+    plt_data = (
+        np.concatenate(x_data) ** 2 * fit_data if pardict["do_corr"] else np.concatenate(x_data) ** 1.0 * fit_data
+    )
+    if pardict["do_corr"]:
+        plt_err = np.concatenate(x_data) ** 2 * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx4)])
+    else:
+        plt_err = np.concatenate(x_data) ** 1.0 * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx0 + nx2)])
+
+    plt.errorbar(
+        x_data[0],
+        plt_data[:nx0],
+        yerr=plt_err[:nx0],
+        marker="o",
+        markerfacecolor="r",
+        markeredgecolor="k",
+        color="r",
+        linestyle="None",
+        markeredgewidth=1.3,
+        zorder=5,
+    )
+    plt.errorbar(
+        x_data[1],
+        plt_data[nx0 : nx0 + nx2],
+        yerr=plt_err[nx0 : nx0 + nx2],
+        marker="o",
+        markerfacecolor="b",
+        markeredgecolor="k",
+        color="b",
+        linestyle="None",
+        markeredgewidth=1.3,
+        zorder=5,
+    )
+    if pardict["do_hex"]:
+        plt.errorbar(
+            x_data[2],
+            plt_data[nx0 + nx2 :],
+            yerr=plt_err[nx0 + nx2 :],
+            marker="o",
+            markerfacecolor="g",
+            markeredgecolor="k",
+            color="g",
+            linestyle="None",
+            markeredgewidth=1.3,
+            zorder=5,
+        )
+
+    plt.xlim(0.03, np.amax(pardict["xfit_max"]) * 1.05)
+    plt.ylim(100.0, 2000.0)
+    if pardict["do_corr"]:
+        plt.xlabel(r"$s\,(h^{-1}\,\mathrm{Mpc})$", fontsize=16)
+        plt.ylabel(r"$s^{2}\xi(s)$", fontsize=16, labelpad=5)
+    else:
+        plt.xlabel(r"$k\,(h\,\mathrm{Mpc}^{-1})$", fontsize=16)
+        plt.ylabel(r"$kP(k)\,(h^{-2}\,\mathrm{Mpc}^{2})$", fontsize=16, labelpad=5)
+    plt.tick_params(width=1.3)
+    plt.tick_params("both", length=10, which="major")
+    plt.tick_params("both", length=5, which="minor")
+    for axis in ["top", "left", "bottom", "right"]:
+        plt.gca().spines[axis].set_linewidth(1.3)
+    for tick in plt.gca().xaxis.get_ticklabels():
+        tick.set_fontsize(14)
+    for tick in plt.gca().yaxis.get_ticklabels():
+        tick.set_fontsize(14)
+    plt.tight_layout()
+    plt.gca().set_autoscale_on(False)
+    plt.ion()
+
+    return plt
+
+def update_plot_combined(pardict, x_data, P_model_NGC, P_model_SGC, colours, fig_name, plt, keep=False): #rather than passing full double-length vector, try to run update_plot twice
     if pardict["do_hex"]:
         nx0, nx2, nx4 = len(x_data[0]), len(x_data[1]), len(x_data[2])
     else:
         x_data = x_data[:2]
         nx0, nx2, nx4 = len(x_data[0]), len(x_data[1]), 0
-
-    plt_data = np.concatenate(x_data) ** 2 * P_model if pardict["do_corr"] else np.hstack((np.concatenate(x_data), np.concatenate(x_data))) ** 1.5 * P_model #Updated to include P0,P2,P0,P2
+    plt_data_NGC = np.concatenate(x_data) ** 2 * P_model if pardict["do_corr"] else np.concatenate(x_data) ** 1.0 * P_model_NGC
+    plt_data_SGC = np.concatenate(x_data) ** 2 * P_model if pardict["do_corr"] else np.concatenate(x_data) ** 1.0 * P_model_SGC
 
     plt10 = plt.errorbar(
-        x_data[0], plt_data[:nx0], marker="None", color="r", linestyle="-", markeredgewidth=1.3, zorder=0,
+        x_data[0], plt_data_NGC[:nx0], marker="None", color="b", linestyle="-", markeredgewidth=1.3, zorder=0,
     )
     plt11 = plt.errorbar(
-        x_data[1], plt_data[nx0 : nx0 + nx2], marker="None", color="b", linestyle="-", markeredgewidth=1.3, zorder=0,
+        x_data[1], plt_data_NGC[nx0 : nx0 + nx2], marker="None", color="g", linestyle="-", markeredgewidth=1.3, zorder=0,
     )
-    plt_SGC10 = plt.errorbar(x_data[0], plt_data[nx0+nx2:nx0+nx2+nx0], marker="None", color="black", linestyle="-", markeredgewidth=1.3, zorder=0,
+    plt10_SGC = plt.errorbar(
+        x_data[0], plt_data_SGC[:nx0], marker="None", color="r", linestyle="-", markeredgewidth=1.3, zorder=0,
     )
-    plt_SGC11 = plt.errorbar(x_data[1], plt_data[nx0+nx2+nx0:nx0+nx2+nx0+nx2], marker="None", color="yellow", linestyle="-", markeredgewidth=1.3, zorder=0,
+    plt11_SGC = plt.errorbar(
+        x_data[1], plt_data_SGC[nx0 : nx0 + nx2], marker="None", color="c", linestyle="-", markeredgewidth=1.3, zorder=0,
     )
     if pardict["do_hex"]:
         plt12 = plt.errorbar(
@@ -1168,21 +1030,96 @@ def update_plot(pardict, x_data, P_model, plt, keep=False):
     if keep:
         plt.ioff()
         plt.show()
-        #print("Accepted!!")
-        #plt.savefig("NGC_SGC_Saved_Attempt.png")
+    if not keep:
+        plt.pause(0.005)
+        if plt10 is not None:
+            plt10.remove()
+            plt10_SGC.remove()
+        if plt11 is not None:
+            plt11.remove()
+            plt11_SGC.remove()
+        if pardict["do_hex"]:
+            if plt12 is not None:
+                plt12.remove()
+
+
+def update_plot_individual(pardict, x_data, P_model, plt, keep=False):
+
+    if pardict["do_hex"]:
+        nx0, nx2, nx4 = len(x_data[0]), len(x_data[1]), len(x_data[2])
+    else:
+        x_data = x_data[:2]
+        nx0, nx2, nx4 = len(x_data[0]), len(x_data[1]), 0
+    plt_data = np.concatenate(x_data) ** 2 * P_model if pardict["do_corr"] else np.concatenate(x_data) ** 1.0 * P_model
+
+    plt10 = plt.errorbar(
+        x_data[0], plt_data[:nx0], marker="None", color="r", linestyle="-", markeredgewidth=1.3, zorder=0,
+    )
+    plt11 = plt.errorbar(
+        x_data[1], plt_data[nx0 : nx0 + nx2], marker="None", color="b", linestyle="-", markeredgewidth=1.3, zorder=0,
+    )
+    if pardict["do_hex"]:
+        plt12 = plt.errorbar(
+            x_data[2], plt_data[nx0 + nx2 :], marker="None", color="g", linestyle="-", markeredgewidth=1.3, zorder=0,
+        )
+
+    if keep:
+        plt.ioff()
+        plt.show()
     if not keep:
         plt.pause(0.005)
         if plt10 is not None:
             plt10.remove()
         if plt11 is not None:
             plt11.remove()
-        if plt_SGC10 is not None:
-            plt_SGC10.remove()
-        if plt_SGC11 is not None:
-           plt_SGC11.remove()	
         if pardict["do_hex"]:
             if plt12 is not None:
                 plt12.remove()
+
+
+def update_plot_components(pardict, kin, P_components, plt, keep=False, comp_list=(True, True, True, True)):
+
+    ls = [":", "-.", "--", "-"]
+    labels = ["Linear", "Linear+Loop", "Linear+Loop+Counter", "Linear+Loop+Counter+Stoch"]
+    kinfac = kin ** 2 if pardict["do_corr"] else kin ** 1.0
+
+    part_comp = [np.zeros(len(kin)), np.zeros(len(kin)), np.zeros(len(kin))]
+    for (line, comp, add, label) in zip(ls, P_components, comp_list, labels):
+        for i, c in enumerate(comp):
+            part_comp[i] += c
+        if add:
+            plt10 = plt.errorbar(
+                kin,
+                kinfac * part_comp[0],
+                marker="None",
+                color="r",
+                linestyle=line,
+                markeredgewidth=1.3,
+                zorder=0,
+                label=label,
+            )
+            plt11 = plt.errorbar(
+                kin, kinfac * part_comp[1], marker="None", color="b", linestyle=line, markeredgewidth=1.3, zorder=0,
+            )
+            if pardict["do_hex"]:
+                plt12 = plt.errorbar(
+                    kin, kinfac * part_comp[2], marker="None", color="g", linestyle=line, markeredgewidth=1.3, zorder=0,
+                )
+    plt.legend()
+
+    if keep:
+        plt.ioff()
+        plt.show()
+    if not keep:
+        plt.pause(0.005)
+        if plt10 is not None:
+            plt10.remove()
+        if plt11 is not None:
+            plt11.remove()
+        if pardict["do_hex"]:
+            if plt12 is not None:
+                plt12.remove()
+
 
 def format_pardict(pardict):
 
@@ -1201,6 +1138,7 @@ def format_pardict(pardict):
 def do_optimization(func, start, birdmodel, fittingdata, plt):
 
     from scipy.optimize import basinhopping
+
     result = basinhopping(
         func,
         start,
