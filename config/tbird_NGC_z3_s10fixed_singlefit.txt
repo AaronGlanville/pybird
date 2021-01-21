@@ -1,0 +1,71 @@
+# Reference cosmology and power spectrum options
+# Which boltzmann code to use.
+#'code' = CAMB
+'code' = CLASS
+
+# Base cosmology/run parameters
+'ln10^{10}A_s' = 3.064325065
+'n_s' = 0.9667
+'h' = 0.6774
+'omega_b' = 0.02230
+'omega_cdm' = 0.1188
+'tau_reio' = 0.066
+'z_pk' = 0.61
+'Omega_k' = 0.0
+'P_k_max_h/Mpc' = 1.0
+
+# Neutrinos for CAMB
+'Sum_mnu' = 0.06
+'nu_hierarchy' = 'degenerate'
+
+# Neutrinos for CLASS
+'N_ur' = 2.0328
+'N_ncdm' = 1
+'m_ncdm' = 0.06
+
+# Grid parameters. Used when generating a grid of models
+# with different template cosmologies, i.e., make_taylorgrid_UNIT.py
+'freepar' = "ln10^{10}A_s", "h", "omega_cdm", "omega_b"
+'dx' = 0.10, 0.075, 0.10, 0.10 #format used to create s10 grids
+'order' = 4
+
+# Template grid parameters. Used when creating a grid of models
+# with fixed template i.e., make_taylorgrid_template.py. Parameters are
+# alpha_perp, alpha_par, f, sigma8 in that order
+'template_dx' = 0.015, 0.015, 0.025, 0.015 
+'template_order' = 4
+
+#Use the same widths between measurements
+'b1_min' = 0.0
+'b1_max' = 3.0
+'c2_min' = -4.0
+'c2_max' = 4.0
+'c4_width' = 0.25
+
+# Paths to output directories and output filenames
+#gridname = "SimFits_WinFunc_z0p38_s10fixed-A_s-h-omega_cdm-omega_b_pm"
+#outgrid = "/home/aaron/Desktop/pybird-cullan/output_files/grids/z1_NGC_s10fixed_grids/"
+
+gridname_NGC = "SimFits_WinFunc_NGCz0p61_s10fixed-A_s-h-omega_cdm-omega_b_pm"
+outgrid_NGC = "/mnt/c/Users/s4393083/Desktop/z1_s10_fixedgrids/z3_NGC_s10fixed_grids/"
+
+gridname_SGC = "SimFits_SGCWinFunc_z0p61_s10fixed-A_s-h-omega_cdm-omega_b_pm"
+outgrid_SGC = "/mnt/c/Users/s4393083/Desktop/z1_s10_fixedgrids/z3_SGC_s10fixed_grids/"
+
+#shot_noise = 5470
+#NGC z3 shot_noise I calculated using Nbodykit
+shot_noise = 7380
+
+datafile = "/mnt/c/Users/s4393083/pybird/output_files/NGC+SGC_z3/Pk/ps1D_DR12_data_NGC_z3_COMPnbar_TIC_340_650_360_120.dat"
+#covfile = "/mnt/c/Users/s4393083/pybird/output_files/NGC+SGC_z1/CovMatrix/Cov_matrix_NGC_z1_kmax_0.3_deltak_0p005_Mono+Quad_Pre_recon_Bianchi_Mocks.txt" #NGC only fits
+covfile = "/mnt/c/Users/s4393083/pybird/output_files/NGC+SGC_z3/CovMatrix/Cov_matrix_NGC+SGC_z3_60x60_kmax_0.3_Mono+Quad_Pre_recon_Bianchi_Mocks.txt" 
+fitfile = "/mnt/c/Users/s4393083/pybird/output_files/NGC+SGC_z3/OutputFits/TestBOSSNGC_z1NGC+SGC_CombinedFit_WinFunc_s10fixed_40000Steps"
+
+# Parameters for different fitting styles
+#Note: D'Amico don't use P4, but do marginalise over nuisance params
+'do_marg' = 1 #Testing
+'do_corr' = 0
+'do_hex' = 0 
+'taylor_order' = 3
+'xfit_min' = 0.033, 0.033, 0.033
+'xfit_max' = 0.20, 0.20, 0.20
