@@ -3,7 +3,8 @@ import sys
 from configobj import ConfigObj
 
 sys.path.append("../")
-from fitting_codes.fitting_utils_NGCSGC_Combined import (
+#from fitting_codes.fitting_utils_NGCSGC_Combined import (
+from fitting_codes.fitting_utils_NGCSGC import(
     FittingData_NGC_SGC,
     BirdModel,
     create_plot_combined,
