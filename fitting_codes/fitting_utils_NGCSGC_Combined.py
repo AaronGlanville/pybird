@@ -9,7 +9,6 @@ from scipy.interpolate import splrep, splev
 import sys
 from scipy.linalg import lapack, cholesky
 import pandas as pd
-import matplotlib
 import matplotlib.pyplot as plt
 
 sys.path.append("../")
@@ -530,7 +529,7 @@ class FittingData_NGC_SGC:
             "invcovdata": invcovdata,
             "fitmask_NGC": fitmask_NGC,
             "fitmask_SGC": fitmask_SGC,
-            "shot_noise_NGC": NGC_shot_noise,
+            "shot_noise_NGC": SGC_shot_noise,
             "shot_noise_SGC": SGC_shot_noise,
         }
 
@@ -553,8 +552,7 @@ class FittingData_NGC_SGC:
             comment="#",
             skiprows=skiprows,
             delim_whitespace=True,
-            names = ["k", "pk0", "pk2", "pk4", "nk"] #format of nbodykit spectra
-            #names=["k", "k_mean", "pk0", "pk2", "pk4", "nk"], #format of bianchi spectra
+            names=["k", "k_mean", "pk0", "pk2", "pk4", "nk"], #format of my power spectra
             #names = ["n","k","k_mean","pk0","pk2","pk4","sigma_lin_pk","nk"],#format of mock mean
         )
         k = dataframe["k"].values
@@ -596,20 +594,20 @@ class FittingData_NGC_SGC:
     def read_pk(self, inputfile_NGC, inputfile_SGC, step_size, skiprows):
         read_pk_NGC = self.read_pk_single(inputfile_NGC, step_size, skiprows)
         read_pk_SGC = self.read_pk_single(inputfile_SGC, step_size, skiprows)
-        #print("NGC =")
-        #print(read_pk_NGC)
-        #print("SGC =")
-        #print(read_pk_SGC)
+        print("NGC =")
+        print(read_pk_NGC)
+        print("SGC =")
+        print(read_pk_SGC)
         pk_NGC_SGC = np.vstack((read_pk_NGC[:, 0], read_pk_NGC[:, 1], read_pk_NGC[:, 2], read_pk_SGC[:, 1], read_pk_SGC[:, 2])).T
-        #print("pk_NGC_SGC")
-        #print(pk_NGC_SGC)
+        print("pk_NGC_SGC")
+        print(pk_NGC_SGC)
         return read_pk_NGC, read_pk_SGC, pk_NGC_SGC
 
     def read_data(self, pardict_NGC, pardict_SGC):
 
         # Read in the data
-        #print(pardict_NGC["datafile"])
-        #print(pardict_SGC["datafile"])
+        print(pardict_NGC["datafile"])
+        print(pardict_SGC["datafile"])
         if pardict_NGC["do_corr"]:
             data = np.array(pd.read_csv(pardict_NGC["datafile"], delim_whitespace=True, header=None))
         else:
@@ -660,19 +658,14 @@ class FittingData_NGC_SGC:
         #print(fit_data)
 
         # Read in, reshape and mask the covariance matrix
-##        cov_flat = np.array(pd.read_csv(pardict_NGC["covfile"], delim_whitespace=True, header=None)) #ORIGINAL COV MATRIX FLAT
-##        cov_flat = cov_flat.flatten() #SO I TRY FLATTENING MINE
-##        nin = len(data_NGC[:, 0])
-##        print("nin = %lf" %nin)
-
-        cov_input = np.array(pd.read_csv(pardict_NGC["covfile"], delim_whitespace=True, header=None)) #+
-        np.savetxt("cov_input_imshow.txt", cov_input)
-        #cov_flat = cov_flat.flatten() #+
-        nin = len(data_NGC[:, 0]) #+
-
+        cov_flat = np.array(pd.read_csv(pardict_NGC["covfile"], delim_whitespace=True, header=None)) #ORIGINAL COV MATRIX FLAT
+        cov_flat = cov_flat.flatten() #SO I TRY FLATTENING MINE
+        nin = len(data_NGC[:, 0])
+        #print("nin = %lf" %nin)
+        #cov_input = cov_flat[:, 2].reshape((3 * nin, 3 * nin)) #ORIGINAL HAD TWO COLUMNS, MY FLATTENED GRID DOES NOT
         #cov_input = cov_flat.reshape((3 * nin, 3 * nin)) #Only for mono+quad+hex
         #cov_input = cov_flat.reshape((2 * nin, 2 * nin)) #Only for mono+quad
-##        cov_input = cov_flat.reshape((4 * nin, 4 * nin)) #Only for NGC mono, NGC quad, SGC Mono, SGC Quad
+        cov_input = cov_flat.reshape((4 * nin, 4 * nin)) #Only for NGC mono, NGC quad, SGC Mono, SGC Quad
         nx0, nx2 = len(x_data_NGC[0]), len(x_data_NGC[1])
         #print("nx0 = %lf" %nx0)
         nx4 = len(x_data_NGC[2]) if pardict_NGC["do_hex"] else 0
@@ -729,7 +722,7 @@ class FittingData_NGC_SGC:
         invcovdata = np.dot(fit_data, cov_inv)
         np.savetxt("cov_input.txt", cov_input)
         np.savetxt("cov_mask.txt", cov)
-        #print("chi2data = %lf" %chi2data)
+        print("chi2data = %lf" %chi2data)
 
         return x_data_NGC, fit_data, fit_data_NGC, fit_data_SGC, cov, cov_inv, chi2data, invcovdata, fitmask_NGC, fitmask_SGC
     def read_data_original(self, pardict):
@@ -754,7 +747,7 @@ class FittingData_NGC_SGC:
         print(cov_input)"""
 
         # Read in the data
-        #print(pardict["datafile"])
+        print(pardict["datafile"])
         if pardict["do_corr"]:
             data = np.array(pd.read_csv(pardict["datafile"], delim_whitespace=True, header=None))
         else:
@@ -814,215 +807,6 @@ class FittingData_NGC_SGC:
 
         return x_data, fit_data, cov, cov_inv, chi2data, invcovdata, fitmask
 
-def create_plot_NGC_SGC_z1_z3(pardict_NGC_z1, pardict_SGC_z1, pardict_NGC_z3, pardict_SGC_z3, colours, fittingdata_z1, fittingdata_z3):
-
-    if pardict_NGC_z1["do_hex"]:
-        x_data_z1 = fittingdata_z1.data["x_data_NGC"] #Only want to use 1 range to define nx0, nx2
-        nx0_z1, nx2_z1, nx4_z1 = len(x_data_z1[0]), len(x_data_z1[1]), len(x_data_z1[2])
-        #print("nx0 = %lf" %nx0_z1)
-    else:
-        #print(fittingdata_z1.data["x_data"][:2])
-        x_data_z1 = fittingdata_z1.data["x_data"][:2]
-        nx0_z1, nx2_z1, nx4_z1 = len(x_data_z1[0]), len(x_data_z1[1]), 0
-    fit_data_NGC_z1 = fittingdata_z1.data["fit_data_NGC"]
-    fit_data_SGC_z1 = fittingdata_z1.data["fit_data_SGC"]
-    cov_z1 = fittingdata_z1.data["cov"]
-
-    if pardict_NGC_z3["do_hex"]:
-        x_data_z3 = fittingdata_z3.data["x_data_NGC"] #Only want to use 1 range to define nx0, nx2
-        nx0_z3, nx2_z3, nx4_z3 = len(x_data_z3[0]), len(x_data_z3[1]), len(x_data_z3[2])
-        #print("nx0 = %lf" %nx0_z3)
-    else:
-        #print(fittingdata_z3.data["x_data"][:2])
-        x_data_z3 = fittingdata_z3.data["x_data"][:2]
-        nx0_z3, nx2_z3, nx4_z3 = len(x_data_z1[0]), len(x_data_z3[1]), 0
-    fit_data_NGC_z3 = fittingdata_z3.data["fit_data_NGC"]
-    fit_data_SGC_z3 = fittingdata_z3.data["fit_data_SGC"]
-    cov_z3 = fittingdata_z3.data["cov"]
-
-    plt_data_NGC_z1 = (
-        np.concatenate(x_data_z1) ** 2 * fit_data_NGC_z1 if pardict_NGC_z1["do_corr"] else np.concatenate(x_data_z1) * fit_data_NGC_z1 
-    )
-    plt_data_SGC_z1 = (
-        np.concatenate(x_data_z1) ** 2 * fit_data_SGC_z1 if pardict_SGC_z1["do_corr"] else np.concatenate(x_data_z1) * fit_data_SGC_z1 
-    )
-    if pardict_NGC_z1["do_corr"]:
-        plt_err_z1 = np.concatenate(x_data_z1) ** 2 * np.sqrt(cov_z1[np.diag_indices(nx0_z1 + nx2_z1 + nx4_z1)])
-    else:
-        plt_err_z1 = np.concatenate((x_data_z1, x_data_z1)).flatten() * np.sqrt(cov_z1[np.diag_indices(nx0_z1 + nx2_z1 + nx0_z1 + nx2_z1)])
-
-
-    plt_data_NGC_z3 = (
-        np.concatenate(x_data_z3) ** 2 * fit_data_NGC_z3 if pardict_NGC_z3["do_corr"] else np.concatenate(x_data_z3) * fit_data_NGC_z3 
-    )
-    plt_data_SGC_z3 = (
-        np.concatenate(x_data_z3) ** 2 * fit_data_SGC_z3 if pardict_SGC_z3["do_corr"] else np.concatenate(x_data_z3) * fit_data_SGC_z3 
-    )
-    if pardict_NGC_z3["do_corr"]:
-        plt_err_z3 = np.concatenate(x_data_z3) ** 2 * np.sqrt(cov_z3[np.diag_indices(nx0_z3 + nx2_z3 + nx4_z3)])
-    else:
-        plt_err_z3 = np.concatenate((x_data_z3, x_data_z3)).flatten() * np.sqrt(cov_z3[np.diag_indices(nx0_z3 + nx2_z3 + nx0_z3 + nx2_z3)])
-
-    params = {'text.usetex': True}
-    plt.rcParams.update(params)
-
-#NGC Monopole + Quadrupole z1
-    plt.errorbar(
-        x_data_z1[0],
-        plt_data_NGC_z1[:nx0_z1],
-        yerr=plt_err_z1[:nx0_z1],
-        marker="o",
-        markerfacecolor=colours[0],
-        markeredgecolor=colours[0],
-        color=colours[0],
-        linestyle="None",
-        markeredgewidth=1.3,
-        zorder=5,
-    )
-    plt.errorbar(
-        x_data_z1[1],
-        plt_data_NGC_z1[nx0_z1 : nx0_z1 + nx2_z1],
-        yerr=plt_err_z1[nx0_z1 : nx0_z1 + nx2_z1],
-        marker="o",
-        markerfacecolor=colours[0],
-        markeredgecolor=colours[0],
-        color=colours[0],
-        linestyle="None",
-        markeredgewidth=1.3,
-        zorder=5,
-    )
-    
-#SGC Monopole + Quadrupole z1 (using distinct NGC/SGC errors from combined cov_matrix) 
-    plt.errorbar(
-        x_data_z1[0],
-        plt_data_SGC_z1[:nx0_z1],
-        yerr=plt_err_z1[nx0_z1 + nx2_z1 : nx0_z1 + nx2_z1 + nx0_z1],
-        marker="o",
-        markerfacecolor=colours[1],
-        markeredgecolor=colours[1],
-        color=colours[1],
-        linestyle="None",
-        markeredgewidth=1.3,
-        zorder=5,
-    )
-    plt.errorbar(
-        x_data_z1[1],
-        plt_data_SGC_z1[nx0_z1 : nx0_z1 + nx2_z1],
-        yerr=plt_err_z1[nx0_z1 + nx0_z1 + nx2_z1 : nx0_z1 + nx2_z1 + nx0_z1 + nx2_z1],
-        marker="o",
-        markerfacecolor=colours[1],
-        markeredgecolor=colours[1],
-        color=colours[1],
-        linestyle="None",
-        markeredgewidth=1.3,
-        zorder=5,
-    )    
-
-    if pardict_NGC_z1["do_hex"]:
-        plt.errorbar(
-            x_data_z1[2],
-            plt_data_NGC[nx0_z1 + nx2_z1 :],
-            yerr=plt_err[nx0_z1 + nx2_z1 :],
-            marker="o",
-            markerfacecolor="g",
-            markeredgecolor="k",
-            color="g",
-            linestyle="None",
-            markeredgewidth=1.3,
-            zorder=5,
-        )
-
-#--------------------------------------------------------------------------------------
-
-#NGC Monopole + Quadrupole z3
-    plt.errorbar(
-        x_data_z3[0],
-        plt_data_NGC_z3[:nx0_z3],
-        yerr=plt_err_z3[:nx0_z3],
-        marker="o",
-        markerfacecolor=colours[2],
-        markeredgecolor=colours[2],
-        color=colours[2],
-        linestyle="None",
-        markeredgewidth=1.3,
-        zorder=5,
-    )
-    plt.errorbar(
-        x_data_z3[1],
-        plt_data_NGC_z3[nx0_z3 : nx0_z3 + nx2_z3],
-        yerr=plt_err_z3[nx0_z3 : nx0_z3 + nx2_z3],
-        marker="o",
-        markerfacecolor=colours[2],
-        markeredgecolor=colours[2],
-        color=colours[2],
-        linestyle="None",
-        markeredgewidth=1.3,
-        zorder=5,
-    )
-    
-#SGC Monopole + Quadrupole z1 (using distinct NGC/SGC errors from combined cov_matrix) 
-    plt.errorbar(
-        x_data_z3[0],
-        plt_data_SGC_z3[:nx0_z3],
-        yerr=plt_err_z3[nx0_z3 + nx2_z3 : nx0_z3 + nx2_z3 + nx0_z3],
-        marker="o",
-        markerfacecolor=colours[3],
-        markeredgecolor=colours[3],
-        color=colours[3],
-        linestyle="None",
-        markeredgewidth=1.3,
-        zorder=5,
-    )
-    plt.errorbar(
-        x_data_z3[1],
-        plt_data_SGC_z3[nx0_z3 : nx0_z3 + nx2_z3],
-        yerr=plt_err_z3[nx0_z3 + nx0_z3 + nx2_z3 : nx0_z3 + nx2_z3 + nx0_z3 + nx2_z3],
-        marker="o",
-        markerfacecolor=colours[3],
-        markeredgecolor=colours[3],
-        color=colours[3],
-        linestyle="None",
-        markeredgewidth=1.3,
-        zorder=5,
-    )    
-
-    if pardict_NGC_z3["do_hex"]:
-        plt.errorbar(
-            x_data_z3[2],
-            plt_data_NGC[nx0_z3 + nx2_z3 :],
-            yerr=plt_err[nx0_z3 + nx2_z3 :],
-            marker="o",
-            markerfacecolor="g",
-            markeredgecolor="k",
-            color="g",
-            linestyle="None",
-            markeredgewidth=1.3,
-            zorder=5,
-        )
-
-    plt.xlim(0.03, np.amax(pardict_NGC_z1["xfit_max"]) * 1.05)
-    plt.ylim(100, 2000)
-    if pardict_NGC_z1["do_corr"]:
-        plt.xlabel(r"$s\,(h^{-1}\,\mathrm{Mpc})$", fontsize=16)
-        plt.ylabel(r"$s^{2}\xi(s)$", fontsize=16, labelpad=5)
-    else:
-        plt.xlabel(r"$k\,(h\,\mathrm{Mpc}^{-1})$", fontsize=16)
-        plt.ylabel(r"$kP(k)\,(h^{-1}\,\mathrm{Mpc})$", fontsize=16, labelpad=5)
-    plt.tick_params(width=1.3)
-    plt.tick_params("both", length=10, which="major")
-    plt.tick_params("both", length=5, which="minor")
-    for axis in ["top", "left", "bottom", "right"]:
-        plt.gca().spines[axis].set_linewidth(1.3)
-    for tick in plt.gca().xaxis.get_ticklabels():
-        tick.set_fontsize(14)
-    for tick in plt.gca().yaxis.get_ticklabels():
-        tick.set_fontsize(14)
-    plt.tight_layout()
-    plt.gca().set_autoscale_on(False)
-    plt.ion()
-
-    return plt
-
 def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
 
     if pardict_NGC["do_hex"]:
@@ -1048,9 +832,6 @@ def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
     else:
         plt_err = np.concatenate((x_data, x_data)).flatten() * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx0 + nx2)])
 
-    params = {'text.usetex': True}
-    plt.rcParams.update(params)
-
 #NGC Monopole + Quadrupole
     plt.errorbar(
         x_data[0],
@@ -1058,25 +839,23 @@ def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
         yerr=plt_err[:nx0],
         marker="o",
         markerfacecolor=colours[0],
-        markeredgecolor="k",
+        markeredgecolor=colours[0],
         color=colours[0],
         linestyle="None",
         markeredgewidth=1.3,
         zorder=5,
-        label=r"$\rm{NGC} \ P_{0}$"
     )
     plt.errorbar(
         x_data[1],
         plt_data_NGC[nx0 : nx0 + nx2],
         yerr=plt_err[nx0 : nx0 + nx2],
-        marker="s",
-        markerfacecolor=colours[0],
-        markeredgecolor="k",
-        color=colours[0],
+        marker="o",
+        markerfacecolor=colours[1],
+        markeredgecolor=colours[1],
+        color=colours[1],
         linestyle="None",
         markeredgewidth=1.3,
         zorder=5,
-        label=r"$\rm{NGC} \ P_{2}$"
     )
     
 #SGC Monopole + Quadrupole (using distinct NGC/SGC errors from combined cov_matrix) 
@@ -1085,26 +864,24 @@ def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
         plt_data_SGC[:nx0],
         yerr=plt_err[nx0 + nx2 : nx0 + nx2 + nx0],
         marker="o",
-        markerfacecolor=colours[1],
-        markeredgecolor="k",
-        color=colours[1],
+        markerfacecolor=colours[2],
+        markeredgecolor=colours[2],
+        color=colours[2],
         linestyle="None",
         markeredgewidth=1.3,
         zorder=5,
-        label=r"$\rm{SGC} \ P_{0}$"
-    ) 
+    )
     plt.errorbar(
         x_data[1],
         plt_data_SGC[nx0 : nx0 + nx2],
         yerr=plt_err[nx0 + nx0 + nx2 : nx0 + nx2 + nx0 + nx2],
-        marker="s",
-        markerfacecolor=colours[1],
-        markeredgecolor="k",
-        color=colours[1],
+        marker="o",
+        markerfacecolor=colours[3],
+        markeredgecolor=colours[3],
+        color=colours[3],
         linestyle="None",
         markeredgewidth=1.3,
         zorder=5,
-        label=r"$\rm{SGC} \ P_{2}$"
     )    
 
     if pardict_NGC["do_hex"]:
@@ -1121,25 +898,17 @@ def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
             zorder=5,
         )
 
-    plt.xlim(0.03, np.amax(pardict_NGC["xfit_max"]) * 1.05)
+    plt.xlim(0.0, np.amax(pardict_NGC["xfit_max"]) * 1.05)
     plt.ylim(100, 2000)
     if pardict_NGC["do_corr"]:
         plt.xlabel(r"$s\,(h^{-1}\,\mathrm{Mpc})$", fontsize=16)
         plt.ylabel(r"$s^{2}\xi(s)$", fontsize=16, labelpad=5)
     else:
-        plt.xlabel(r"$k\,[h\,\mathrm{Mpc}^{-1}]$", fontsize=16)
-        plt.ylabel(r"$kP(k)\,[h^{-2}\,\mathrm{Mpc}^{2}]$", fontsize=16, labelpad=5)
+        plt.xlabel(r"$k\,(h\,\mathrm{Mpc}^{-1})$", fontsize=16)
+        plt.ylabel(r"$kP(k)\,(h^{-1}\,\mathrm{Mpc})$", fontsize=16, labelpad=5)
     plt.tick_params(width=1.3)
     plt.tick_params("both", length=10, which="major")
     plt.tick_params("both", length=5, which="minor")
-    #plt.legend(prop={'size':12}, loc='best')
-    plt.text(0.1395, 1850, r"$\rm{BOSS} \ \rm{DR12} \ z_{3}$", size=16)
-    plt.text(0.14, 1720, r"$\rm{NGC} \ P_{0} \ \ \ \ \ \ \rm{SGC} \ P_{0}$", size=14)
-    plt.scatter(0.1685, 1750, marker="o", color=colours[0])
-    plt.scatter(0.2045, 1750, marker="o", color=colours[1]) 
-    plt.text(0.14, 1590, r"$\rm{NGC} \ P_{2} \ \ \ \ \ \ \rm{SGC} \ P_{2}$", size=14)
-    plt.scatter(0.1685, 1620, marker="s", color=colours[0])
-    plt.scatter(0.2045, 1620, marker="s", color=colours[1]) 
     for axis in ["top", "left", "bottom", "right"]:
         plt.gca().spines[axis].set_linewidth(1.3)
     for tick in plt.gca().xaxis.get_ticklabels():
@@ -1232,7 +1001,7 @@ def create_plot(pardict, fittingdata):
 
     return plt
 
-def update_plot_combined(pardict, x_data, P_model_NGC, P_model_SGC, colours, fig_name, plt, keep=False): #runs NGC/SGC combined plots
+def update_plot_combined(pardict, x_data, P_model_NGC, P_model_SGC, colours, fig_name, plt, keep=False): #rather than passing full double-length vector, try to run update_plot twice
     if pardict["do_hex"]:
         nx0, nx2, nx4 = len(x_data[0]), len(x_data[1]), len(x_data[2])
     else:
@@ -1245,13 +1014,13 @@ def update_plot_combined(pardict, x_data, P_model_NGC, P_model_SGC, colours, fig
         x_data[0], plt_data_NGC[:nx0], marker="None", color="b", linestyle="-", markeredgewidth=1.3, zorder=0,
     )
     plt11 = plt.errorbar(
-        x_data[1], plt_data_NGC[nx0 : nx0 + nx2], marker="None", color="b", linestyle="-", markeredgewidth=1.3, zorder=0,
+        x_data[1], plt_data_NGC[nx0 : nx0 + nx2], marker="None", color="g", linestyle="-", markeredgewidth=1.3, zorder=0,
     )
     plt10_SGC = plt.errorbar(
         x_data[0], plt_data_SGC[:nx0], marker="None", color="r", linestyle="-", markeredgewidth=1.3, zorder=0,
     )
     plt11_SGC = plt.errorbar(
-        x_data[1], plt_data_SGC[nx0 : nx0 + nx2], marker="None", color="r", linestyle="-", markeredgewidth=1.3, zorder=0,
+        x_data[1], plt_data_SGC[nx0 : nx0 + nx2], marker="None", color="c", linestyle="-", markeredgewidth=1.3, zorder=0,
     )
     if pardict["do_hex"]:
         plt12 = plt.errorbar(
@@ -1260,7 +1029,6 @@ def update_plot_combined(pardict, x_data, P_model_NGC, P_model_SGC, colours, fig
 
     if keep:
         plt.ioff()
-        plt.savefig(fig_name, dpi=300)
         plt.show()
     if not keep:
         plt.pause(0.005)
@@ -1274,68 +1042,6 @@ def update_plot_combined(pardict, x_data, P_model_NGC, P_model_SGC, colours, fig
             if plt12 is not None:
                 plt12.remove()
 
-def update_plot_NGC_SGC_z1_z3(pardict_z1, pardict_z3, x_data_z1, x_data_z3, P_model_NGC_z1, P_model_SGC_z1, P_model_NGC_z3, P_model_SGC_z3, colours, fig_name, plt, keep=False): #code to run NGC/SGC z1+z3 combined plots
-    if pardict_z1["do_hex"]:
-        nx0_z1, nx2_z1, nx4_z1 = len(x_data_z1[0]), len(x_data_z1[1]), len(x_data_z1[2])
-    else:
-        x_data_z1 = x_data_z1[:2]
-        nx0_z1, nx2_z1, nx4_z1 = len(x_data_z1[0]), len(x_data_z1[1]), 0
-
-    if pardict_z3["do_hex"]:
-        nx0_z3, nx2_z3, nx4_z3 = len(x_data_z3[0]), len(x_data_z3[1]), len(x_data_z3[2])
-    else:
-        x_data_z3 = x_data_z3[:2]
-        nx0_z3, nx2_z3, nx4_z3 = len(x_data_z3[0]), len(x_data_z3[1]), 0
-
-    plt_data_NGC_z1 = np.concatenate(x_data_z1) ** 2 * P_model if pardict_z1["do_corr"] else np.concatenate(x_data_z1) ** 1.0 * P_model_NGC_z1
-    plt_data_SGC_z1 = np.concatenate(x_data_z1) ** 2 * P_model if pardict_z1["do_corr"] else np.concatenate(x_data_z1) ** 1.0 * P_model_SGC_z1
-
-    plt_data_NGC_z3 = np.concatenate(x_data_z3) ** 2 * P_model if pardict_z3["do_corr"] else np.concatenate(x_data_z3) ** 1.0 * P_model_NGC_z3
-    plt_data_SGC_z3 = np.concatenate(x_data_z3) ** 2 * P_model if pardict_z3["do_corr"] else np.concatenate(x_data_z3) ** 1.0 * P_model_SGC_z3
-
-    plt_NGC_z1_mono = plt.errorbar(
-        x_data_z1[0], plt_data_NGC_z1[:nx0_z1], marker="None", color=colours[0], linestyle="-", markeredgewidth=1.3, zorder=0,
-    )
-    plt_NGC_z1_quad = plt.errorbar(
-        x_data_z1[1], plt_data_NGC_z1[nx0_z1 : nx0_z1 + nx2_z1], marker="None", color=colours[0], linestyle="-", markeredgewidth=1.3, zorder=0,
-    )
-    plt_SGC_z1_mono = plt.errorbar(
-        x_data_z1[0], plt_data_SGC_z1[:nx0_z1], marker="None", color=colours[1], linestyle="-", markeredgewidth=1.3, zorder=0,
-    )
-    plt_SGC_z1_quad = plt.errorbar(
-        x_data_z1[1], plt_data_SGC_z1[nx0_z1 : nx0_z1 + nx2_z1], marker="None", color=colours[1], linestyle="-", markeredgewidth=1.3, zorder=0,
-    )
-
-    plt_NGC_z3_mono = plt.errorbar(
-        x_data_z3[0], plt_data_NGC_z3[:nx0_z3], marker="None", color=colours[2], linestyle="-", markeredgewidth=1.3, zorder=0,
-    )
-    plt_NGC_z3_quad = plt.errorbar(
-        x_data_z3[1], plt_data_NGC_z3[nx0_z3 : nx0_z3 + nx2_z3], marker="None", color=colours[2], linestyle="-", markeredgewidth=1.3, zorder=0,
-    )
-    plt_SGC_z3_mono = plt.errorbar(
-        x_data_z3[0], plt_data_SGC_z3[:nx0_z3], marker="None", color=colours[3], linestyle="-", markeredgewidth=1.3, zorder=0,
-    )
-    plt_SGC_z3_quad = plt.errorbar(
-        x_data_z3[1], plt_data_SGC_z3[nx0_z3 : nx0_z3 + nx2_z3], marker="None", color=colours[3], linestyle="-", markeredgewidth=1.3, zorder=0,
-    )
-
-    if keep:
-        plt.ioff()
-        plt.show()
-    if not keep:
-        plt.pause(0.005)
-        if plt_NGC_z1_mono is not None:
-            plt_NGC_z1_mono.remove()
-            plt_SGC_z1_mono.remove()
-        if plt_NGC_z1_quad is not None:
-            plt_NGC_z1_quad.remove()
-            plt_SGC_z1_quad.remove()
-        if plt_NGC_z3_mono is not None:
-            plt_NGC_z3_mono.remove()
-            plt_SGC_z3_mono.remove()
-        if plt_NGC_z3_quad is not None:
-            plt_NGC_z3_quad.remove()
-            plt_SGC_z3_quad.remove()
 
 def update_plot_individual(pardict, x_data, P_model, plt, keep=False):
 

@@ -18,7 +18,7 @@ from tbird.computederivs import get_grids, get_template_grids, get_PSTaylor, get
 
 # Wrapper around the pybird data and model evaluation
 class BirdModel:
-    def __init__(self, pardict, template=False, direct=False):
+    def __init__(self, pardict, template=True, direct=False):
 
         self.pardict = pardict
         self.Nl = 3 if pardict["do_hex"] else 2
@@ -511,16 +511,14 @@ class FittingData:
             comment="#",
             skiprows=skiprows,
             delim_whitespace=True,
-            names=["k", "pk0", "pk2", "pk4", "nk"], #If using nbodykit fit, include Pk4
-            #names=["k", "k_mean", "pk0", "pk2", "nk"] #If using BOSS Pk 
-            #names=["k", "k_mean", "pk0", "pk2", "pk4", "nk"], #If including Pk_mean
+            names=["k", "pk0", "pk1", "pk2", "pk3", "pk4", "nk"],
         )
         k = dataframe["k"].values
         if step_size == 1:
             k_rebinned = k
             pk0_rebinned = dataframe["pk0"].values
             pk2_rebinned = dataframe["pk2"].values
-            #pk4_rebinned = dataframe["pk4"].values
+            pk4_rebinned = dataframe["pk4"].values
         else:
             add = k.size % step_size
             weight = dataframe["nk"].values
@@ -533,23 +531,22 @@ class FittingData:
                 dataframe["pk2"].values = np.concatenate(
                     (dataframe["pk2"].values, [dataframe["pk2"].values[-1]] * to_add)
                 )
-                #dataframe["pk4"].values = np.concatenate(
-                #    (dataframe["pk4"].values, [dataframe["pk4"].values[-1]] * to_add)
-                #)
+                dataframe["pk4"].values = np.concatenate(
+                    (dataframe["pk4"].values, [dataframe["pk4"].values[-1]] * to_add)
+                )
                 weight = np.concatenate((weight, [0] * to_add))
             k = k.reshape((-1, step_size))
             pk0 = (dataframe["pk0"].values).reshape((-1, step_size))
             pk2 = (dataframe["pk2"].values).reshape((-1, step_size))
-            #pk4 = (dataframe["pk4"].values).reshape((-1, step_size))
+            pk4 = (dataframe["pk4"].values).reshape((-1, step_size))
             weight = weight.reshape((-1, step_size))
             # Take the average of every group of step_size rows to rebin
             k_rebinned = np.average(k, axis=1)
             pk0_rebinned = np.average(pk0, axis=1, weights=weight)
             pk2_rebinned = np.average(pk2, axis=1, weights=weight)
-            #pk4_rebinned = np.average(pk4, axis=1, weights=weight)
+            pk4_rebinned = np.average(pk4, axis=1, weights=weight)
 
-        #return np.vstack([k_rebinned, pk0_rebinned, pk2_rebinned, pk4_rebinned]).T
-        return np.vstack([k_rebinned, pk0_rebinned, pk2_rebinned]).T
+        return np.vstack([k_rebinned, pk0_rebinned, pk2_rebinned, pk4_rebinned]).T
 
     def read_data(self, pardict):
 
@@ -560,13 +557,11 @@ class FittingData:
         inputfile = str("%s/2PCF_20200514-unit-elg-3gpc-001.dat" % inputbase)
         data = np.array(pd.read_csv(inputfile, delim_whitespace=True, dtype=float, header=None, skiprows=skiprows))
         sdata = data[:, 0]
-
         xi = np.empty((nmocks, 4 * len(sdata)))
         for i in range(nmocks):
             inputfile = str("%s/2PCF_20200514-unit-elg-3gpc-%.3d.dat" % (inputbase, i))
             data = np.array(pd.read_csv(inputfile, delim_whitespace=True, dtype=float, header=None, skiprows=skiprows))
             xi[i] = np.concatenate([data[:, 0], data[:, 1], data[:, 2], data[:, 3]])
-
         data = np.mean(xi, axis=0)
         data = data.reshape((4, len(sdata))).T
         cov_input = np.cov(xi[:, len(data[:, 0]) :].T)
@@ -577,8 +572,7 @@ class FittingData:
         if pardict["do_corr"]:
             data = np.array(pd.read_csv(pardict["datafile"], delim_whitespace=True, header=None))
         else:
-            #data = self.read_pk(pardict["datafile"], 1, 10)
-            data = self.read_pk(pardict["datafile"], 1, 0) #no need to skip lines
+            data = self.read_pk(pardict["datafile"], 1, 10)
 
         x_data = data[:, 0]
         fitmask = [
@@ -599,16 +593,9 @@ class FittingData:
             fit_data = np.concatenate([data[fitmask[0], 1], data[fitmask[1], 2]])
 
         # Read in, reshape and mask the covariance matrix
-        #cov_flat = np.array(pd.read_csv(pardict["covfile"], delim_whitespace=True, header=None))
-        #nin = len(data[:, 0])
-        #cov_input = cov_flat[:, 2].reshape((3 * nin, 3 * nin))
-
-        cov_input = np.array(pd.read_csv(pardict["covfile"], delim_whitespace=True, header=None)) #+
-        np.savetxt("cov_input_imshow.txt", cov_input)
-        #cov_flat = cov_flat.flatten() #+
-        nin = len(data[:, 0]) #+
-        print(nin)
-
+        cov_flat = np.array(pd.read_csv(pardict["covfile"], delim_whitespace=True, header=None))
+        nin = len(data[:, 0])
+        cov_input = cov_flat[:, 2].reshape((3 * nin, 3 * nin))
         nx0, nx2 = len(x_data[0]), len(x_data[1])
         nx4 = len(x_data[2]) if pardict["do_hex"] else 0
         mask0, mask2, mask4 = fitmask[0][:, None], fitmask[1][:, None], fitmask[2][:, None]
@@ -647,14 +634,14 @@ def create_plot(pardict, fittingdata):
 
     plt_data = (
         np.concatenate(x_data) ** 2 * fit_data if pardict["do_corr"] else np.concatenate(x_data) ** 1.0 * fit_data
+        #np.concatenate(x_data) ** 2 * fit_data if pardict["do_corr"] else fit_data
     )
     if pardict["do_corr"]:
         plt_err = np.concatenate(x_data) ** 2 * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx4)])
     else:
-        plt_err = np.concatenate(x_data) ** 1.0 * np.sqrt(cov[np.diag_indices(nx0 + nx2)])
+        plt_err = np.concatenate(x_data) ** 1.0 * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx4)])
 
-    params = {'text.usetex': True}
-    plt.rcParams.update(params)
+    print(plt_err)
 
     plt.errorbar(
         x_data[0],
@@ -695,7 +682,7 @@ def create_plot(pardict, fittingdata):
         )
 
     plt.xlim(0.03, np.amax(pardict["xfit_max"]) * 1.05)
-    plt.ylim(100.0, 2000.0)
+    plt.ylim(0.0, 750.0)
     if pardict["do_corr"]:
         plt.xlabel(r"$s\,(h^{-1}\,\mathrm{Mpc})$", fontsize=16)
         plt.ylabel(r"$s^{2}\xi(s)$", fontsize=16, labelpad=5)

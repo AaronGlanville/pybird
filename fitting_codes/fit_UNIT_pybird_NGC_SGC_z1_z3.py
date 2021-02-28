@@ -68,7 +68,7 @@ def do_emcee(func, start, birdmodel, fittingdata, plt):
     # Run the sampler for a max of 20000 iterations. We check convergence every 100 steps and stop if
     # the chain is longer than 100 times the estimated autocorrelation time and if this estimate
     # changed by less than 1%. I copied this from the emcee site as it seemed reasonable.
-    max_iter = 40000
+    max_iter = 60000
     index = 0
     old_tau = np.inf
     autocorr = np.empty(max_iter)
@@ -109,6 +109,7 @@ def lnpost(params, birdmodel, fittingdata, plt):
 
 
 def lnprior(params, birdmodel, data):
+    prior_sum = 0 #initialisation
     for i, (pardict, model, data) in enumerate(zip(pardicts, birdmodel_z1_z3_combined, fittingdata_z1_z3_combined)):
         index = fittingdata_z1_z3_combined.index(data)
         fitting_data = fittingdata_z1_z3_combined[index]
@@ -160,8 +161,8 @@ def lnprior(params, birdmodel, data):
         c4_prior_NGC = -0.5 * 0.25 * c4_NGC ** 2
         c4_prior_SGC = -0.5 * 0.25 * c4_SGC ** 2
         if birdmodel.pardict["do_marg"]:
-
-            return omega_b_prior + 2*(c4_prior_NGC) + 2*(c4_prior_SGC) #assumes c4 prior range is the same between models
+            prior_sum = prior_sum + omega_b_prior + c4_prior_NGC + c4_prior_SGC
+            return prior_sum #Should double check this- should these params/biases be doubled? what about omega_b?
 
         else:
             # Gaussian prior for b3 of width 2 centred on 0
@@ -212,8 +213,8 @@ def lnprior(params, birdmodel, data):
             # Gaussian prior for bnlo of width 2 centred on 0
             bnlo_prior_SGC = -0.5 * 0.25 * bnlo_SGC ** 2
 
-            return (
-                omega_b_prior
+            prior_sum = (prior_sum
+                + omega_b_prior
                 + c4_prior_NGC
                 + b3_prior_NGC
                 + cct_prior_NGC
@@ -234,6 +235,7 @@ def lnprior(params, birdmodel, data):
                 + cequad_prior_SGC
                 + bnlo_prior_SGC
             )
+            return prior_sum
 
 
 def lnlike(params, birdmodel, fittingdata, plt):
@@ -417,8 +419,6 @@ if __name__ == "__main__":
 
     # Just converts strings in pardicts to numbers in int/float etc.
     pardict_z1_NGC = format_pardict(pardict_z1_NGC)
-    #print("pardict_z1_NGC = ")
-    #print(pardict_z1_NGC)
     pardict_z1_SGC = format_pardict(pardict_z1_SGC)
     pardict_z3_NGC = format_pardict(pardict_z3_NGC)
     pardict_z3_SGC = format_pardict(pardict_z3_SGC)
@@ -460,7 +460,7 @@ if __name__ == "__main__":
     #Our data vector follows the order [[4 cosmo], [z1_NGC], [z1_SGC], [z3_NGC], [z3_SGC]]
 
     # Does an optimization
-    result = do_optimization(lambda *args: -lnpost(*args), start, birdmodel_z1_z3_combined, fittingdata_z1_z3_combined, plt)
+    #result = do_optimization(lambda *args: -lnpost(*args), start, birdmodel_z1_z3_combined, fittingdata_z1_z3_combined, plt)
 
     # Does an MCMC
-    #do_emcee(lnpost, start, birdmodel_z1_z3_combined, fittingdata_z1_z3_combined, plt)
+    do_emcee(lnpost, start, birdmodel_z1_z3_combined, fittingdata_z1_z3_combined, plt)

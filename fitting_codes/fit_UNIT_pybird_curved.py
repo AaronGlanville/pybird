@@ -3,7 +3,6 @@ import sys
 from configobj import ConfigObj
 
 sys.path.append("../")
-#DEFAULT, DESIGNED TO ACCEPT MONO + QUAD ONLY
 from fitting_codes.fitting_utils import (
     FittingData,
     BirdModel,
@@ -12,16 +11,6 @@ from fitting_codes.fitting_utils import (
     format_pardict,
     do_optimization,
 )
-
-#For exploring template fits only
-#from fitting_codes.fitting_utils_template import (
-#    FittingData,
-#    BirdModel,
-#    create_plot,
-#    update_plot,
-#    format_pardict,
-#    do_optimization,
-#)
 
 def do_emcee(func, start, birdmodel, fittingdata, plt):
 
@@ -54,7 +43,10 @@ def do_emcee(func, start, birdmodel, fittingdata, plt):
     #        marg_str,
     #    )
     #)
-    chainfile = "SGC_z3_marg_MCMC_fit_Nbodykit_recomputed_grid"
+    
+
+    chainfile = "SGC_z1_marg_MCMC_fit_curved_nbodykit_wide_grid_fixed_ob"
+    #chainfile = "test"
     print(chainfile)
 
     # Set up the backend
@@ -72,8 +64,8 @@ def do_emcee(func, start, birdmodel, fittingdata, plt):
     old_tau = np.inf
     autocorr = np.empty(max_iter)
     counter = 0
-    for sample in sampler.sample(begin, iterations=max_iter, progress=True):
-
+    #for sample in sampler.sample(begin, skip_initial_state_check = True, iterations=max_iter, progress=True):
+    for sample in sampler.sample(begin, skip_initial_state_check = True, iterations=max_iter, progress=True):
         # Only check convergence every 100 steps
         if sampler.iteration % 100:
             continue
@@ -102,6 +94,10 @@ def do_emcee(func, start, birdmodel, fittingdata, plt):
             break
         old_tau = tau
 
+    #if sampler.iteration == (max_iter - 1):
+    #    print("End of iteration reached, printing:")
+    #    break
+
         index += 1
 
 
@@ -124,20 +120,27 @@ def lnprior(params, birdmodel):
     else:
         b1, c2, b3, c4, cct, cr1, cr2, ce1, cemono, cequad, bnlo = params[-11:]
 
-    ln10As, h, omega_cdm, omega_b = params[:4]
+    ln10As, h, omega_cdm, omega_b, Omega_k = params[:5]
 
-    lower_bounds = birdmodel.valueref - birdmodel.pardict["order"] * birdmodel.delta
-    upper_bounds = birdmodel.valueref + birdmodel.pardict["order"] * birdmodel.delta
+    lower_bounds = birdmodel.valueref - np.abs(birdmodel.pardict["order"] * birdmodel.delta)
+    upper_bounds = birdmodel.valueref + np.abs(birdmodel.pardict["order"] * birdmodel.delta)
 
     # Flat priors for cosmological parameters
-    if np.any(np.less([ln10As, h, omega_cdm, omega_b], lower_bounds)) or np.any(
-        np.greater([ln10As, h, omega_cdm, omega_b], upper_bounds)
+    if np.any(np.less([ln10As, h, omega_cdm, omega_b, Omega_k], lower_bounds)) or np.any(
+        np.greater([ln10As, h, omega_cdm, omega_b, Omega_k], upper_bounds)
     ):
+        #print("Upper bounds = ")
+        #print(upper_bounds)
+        #print("Lower bounds = ")
+        #print(lower_bounds)
+        #print("prior is not happy")
+        #print([ln10As, h, omega_cdm, omega_b, Omega_k])
+
         return -np.inf
 
     # BBN (D/H) inspired prior on omega_b
-    #omega_b_prior = -0.5 * (omega_b - 0.02166) ** 2 / 0.00037 ** 2
-    omega_b_prior = -0.5 * (omega_b - 0.02166) ** 2 / 0.00026 ** 2
+    #omega_b_prior = -0.5 * (omega_b - birdmodel.valueref[3]) ** 2 / 0.00037 ** 2
+    omega_b_prior = -0.5 * (omega_b - 0.02166) ** 2 / 0.00026 ** 2 #updated prior
 
     # Flat prior for b1
     if b1 < 0.0 or b1 > 3.0:
@@ -217,9 +220,9 @@ def lnlike(params, birdmodel, fittingdata, plt):
         ]
 
     # Get the bird model
-    ln10As, h, omega_cdm, omega_b = params[:4]
+    ln10As, h, omega_cdm, omega_b, Omega_k = params[:5]
 
-    Plin, Ploop = birdmodel.compute_pk([ln10As, h, omega_cdm, omega_b])
+    Plin, Ploop = birdmodel.compute_pk([ln10As, h, omega_cdm, omega_b, Omega_k])
     P_model, P_model_interp = birdmodel.compute_model(bs, Plin, Ploop, fittingdata.data["x_data"])
     Pi = birdmodel.get_Pi_for_marg(Ploop, bs[0], fittingdata.data["shot_noise"], fittingdata.data["x_data"])
 
@@ -249,8 +252,8 @@ def lnlike(params, birdmodel, fittingdata, plt):
             chi_squared_print = birdmodel.compute_chi2(P_model_interp, Pi, fittingdata.data)
             pardict["do_marg"] = 1
         update_plot(pardict, fittingdata.data["x_data"], P_model_interp, plt)
-        if np.random.rand() < 0.1:
-            print(params, chi_squared_print)
+        #if np.random.rand() < 0.1:
+        #    print(params, chi_squared_print)
 
     return -0.5 * chi_squared
 
@@ -259,22 +262,25 @@ if __name__ == "__main__":
 
     # Code to generate a power spectrum template at fixed cosmology using pybird, then fit the AP parameters and fsigma8
     # First read in the config file
-    #configfile = sys.argv[1]
-    #configfile = "../config/tbird_NGC_z1_s10fixed_singlefit_singlecov_nbodykit.txt"
-    #configfile = "../config/tbird_SGC_z1_s10fixed_singlefit_nbodykit.txt"
-    #configfile = "../config/tbird_NGC_z3_s10fixed_singlefit_singlecov_nbodykit.txt"
-    configfile = "../config/tbird_SGC_z3_s10fixed_singlefit_nbodykit.txt"
+    #configfile = "../config/tbird_NGC_z3_s10fixed_singlefit_singlecov_curved.txt"
+    #configfile = "../config/tbird_SGC_z3_s10fixed_singlefit_curved_omk0p2_center.txt" #SGC fits using a grid centered on Omega_k = +0.02, instead of the standard -0.02.
+    configfile = "../config/tbird_SGC_z1_s10fixed_singlefit_curved_nbodykit.txt" #SGC z1, using nbodykit Pk and cov_matrix, wider grid
+    #configfile = "../config/tbird_SGC_z3_s10fixed_singlefit_curved_omk0p2_center.txt"
     plot_flag = int(sys.argv[1])
     pardict = ConfigObj(configfile)
 
     # Just converts strings in pardicts to numbers in int/float etc.
     pardict = format_pardict(pardict)
+    print("pardict = ")
+    print(pardict)
 
     # Set up the data
     fittingdata = FittingData(pardict, shot_noise=float(pardict["shot_noise"]))
 
     # Set up the BirdModel
     birdmodel = BirdModel(pardict, template=False)
+    print("Birdmodel is ")
+    print(birdmodel)
 
     # Plotting (for checking/debugging, should turn off for production runs)
     plt = None
@@ -282,12 +288,15 @@ if __name__ == "__main__":
         plt = create_plot(pardict, fittingdata)
 
     if birdmodel.pardict["do_marg"]:
-        start = np.concatenate([birdmodel.valueref[:4], [1.3, 0.5, 0.5]])
+        start = np.concatenate([birdmodel.valueref[:5], [1.3, 0.5, 0.5]])
     else:
-        start = np.concatenate([birdmodel.valueref[:4], [1.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]])
+        start = np.concatenate([birdmodel.valueref[:5], [1.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]])
+    print(start)
 
     # Does an optimization
     #result = do_optimization(lambda *args: -lnpost(*args), start, birdmodel, fittingdata, plt)
-
+#[2.89498558, 0.66985936, 0.12254694, 0.02165628, 0.06544618, 2.15989887, 0.43412161, 0.09590715] -NGC z3 BEST FIT: SHOULD CHECK THIS- Maybe repeat with omega_k set to positive value
+# 2.24184294,  0.68552287,  0.1077006 ,  0.02165721, -0.14, 2.59533951, -1.99523625,  0.03326179] -SGC z3 BEST FIT: Going to repeat NGC z3 with Omega_k base set to positive to check indexing
+# [3.05986046, 0.66211256, 0.12489157, 0.02166699, 0.13999985, 2.10330561, 0.4033078 , 0.17462283] -NGC z3 BEST FIT, set omega_k center to +0.02- still pushing to edge of grid, no clue why? Seems like Omega_k degenerate with As, maybe need to place a physically motivated prior?
     # Does an MCMC
     do_emcee(lnpost, start, birdmodel, fittingdata, plt)

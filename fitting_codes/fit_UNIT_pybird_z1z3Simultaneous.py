@@ -265,7 +265,7 @@ def lnlike(params, birdmodel, fittingdata, plt):
         #if np.random.rand() < 0.1:
         #    print(params, chi_squared)
 
-    #print("Returned chi_squared = %lf" %chi_squared)
+    print("Returned chi_squared = %lf" %chi_squared)
     return -0.5 * chi_squared
 
 

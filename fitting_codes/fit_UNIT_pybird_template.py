@@ -3,7 +3,7 @@ import sys
 from configobj import ConfigObj
 
 sys.path.append("../")
-from fitting_codes.fitting_utils import (
+from fitting_codes.fitting_utils_template import (
     FittingData,
     BirdModel,
     create_plot,
@@ -36,18 +36,19 @@ def do_emcee(func, start, birdmodel, fittingdata, plt):
     fitlimhex = birdmodel.pardict["xfit_min"][2] if pardict["do_corr"] else birdmodel.pardict["xfit_max"][2]
 
     taylor_strs = ["grid", "1order", "2order", "3order", "4order"]
-    chainfile = str(
-        fmt_str
-        % (
-            birdmodel.pardict["fitfile"],
-            dat_str,
-            fitlim,
-            fitlimhex,
-            taylor_strs[pardict["taylor_order"]],
-            hex_str,
-            marg_str,
-        )
-    )
+    #chainfile = str(
+    #    fmt_str
+    #    % (
+    #        birdmodel.pardict["fitfile"],
+    #        dat_str,
+    #        fitlim,
+    #        fitlimhex,
+    #        taylor_strs[pardict["taylor_order"]],
+    #        hex_str,
+    #        marg_str,
+    #    )
+    #)
+    chainfile = "DESI_template_stress_test_iter1_full_emcee"
     print(chainfile)
 
     # Set up the backend
@@ -60,7 +61,7 @@ def do_emcee(func, start, birdmodel, fittingdata, plt):
     # Run the sampler for a max of 20000 iterations. We check convergence every 100 steps and stop if
     # the chain is longer than 100 times the estimated autocorrelation time and if this estimate
     # changed by less than 1%. I copied this from the emcee site as it seemed reasonable.
-    max_iter = 30000
+    max_iter = 50000
     index = 0
     old_tau = np.inf
     autocorr = np.empty(max_iter)
@@ -221,8 +222,10 @@ if __name__ == "__main__":
 
     # Code to generate a power spectrum template at fixed cosmology using pybird, then fit the AP parameters and fsigma8
     # First read in the config file
-    configfile = sys.argv[1]
-    plot_flag = int(sys.argv[2])
+    #configfile = sys.argv[1]
+    plot_flag = int(sys.argv[1])
+    configfile = "../config/DESI_template_stress_test_iter1.ini"
+    #plot_flat = 1
     pardict = ConfigObj(configfile)
 
     # Just converts strings in pardicts to numbers in int/float etcz.
@@ -247,7 +250,7 @@ if __name__ == "__main__":
         )
 
     # Does an optimization
-    result = do_optimization(lambda *args: -lnpost(*args), start, birdmodel, fittingdata, plt)
+    #result = do_optimization(lambda *args: -lnpost(*args), start, birdmodel, fittingdata, plt)
 
     # Does an MCMC
-    # do_emcee(lnpost, start, birdmodel, fittingdata, plt)
+    do_emcee(lnpost, start, birdmodel, fittingdata, plt)

@@ -515,9 +515,9 @@ class BirdModel:
 
 # Holds all the data in a convenient dictionary
 class FittingData_NGC_SGC:
-    def __init__(self, pardict_NGC, pardict_SGC, NGC_shot_noise, SGC_shot_noise):
+    def __init__(self, pardict_NGC_SGC, NGC_shot_noise, SGC_shot_noise):
 
-        x_data, fit_data_combined, fit_data_NGC, fit_data_SGC, cov, cov_inv, chi2data, invcovdata, fitmask_NGC, fitmask_SGC = self.read_data(pardict_NGC, pardict_SGC)
+        x_data, fit_data_combined, fit_data_NGC, fit_data_SGC, cov, cov_inv, chi2data, invcovdata, fitmask_NGC, fitmask_SGC = self.read_data(pardict_NGC_SGC)
 
         self.data = {
             "x_data": x_data,
@@ -553,8 +553,7 @@ class FittingData_NGC_SGC:
             comment="#",
             skiprows=skiprows,
             delim_whitespace=True,
-            names = ["k", "pk0", "pk2", "pk4", "nk"] #format of nbodykit spectra
-            #names=["k", "k_mean", "pk0", "pk2", "pk4", "nk"], #format of bianchi spectra
+            names=["k", "k_mean", "pk0", "pk2", "pk4", "nk"], #format of my power spectra
             #names = ["n","k","k_mean","pk0","pk2","pk4","sigma_lin_pk","nk"],#format of mock mean
         )
         k = dataframe["k"].values
@@ -605,48 +604,48 @@ class FittingData_NGC_SGC:
         #print(pk_NGC_SGC)
         return read_pk_NGC, read_pk_SGC, pk_NGC_SGC
 
-    def read_data(self, pardict_NGC, pardict_SGC):
+    def read_data(self, pardict_NGC_SGC):
 
         # Read in the data
         #print(pardict_NGC["datafile"])
         #print(pardict_SGC["datafile"])
-        if pardict_NGC["do_corr"]:
-            data = np.array(pd.read_csv(pardict_NGC["datafile"], delim_whitespace=True, header=None))
-        else:
+        #if pardict_NGC["do_corr"]:
+        #    data = np.array(pd.read_csv(pardict_NGC["datafile"], delim_whitespace=True, header=None))
+        #else:
             #data = self.read_pk(pardict["datafile"], 1, 10) #Original- skips the first 10 lines of DESI stage 2 data
-            data_NGC, data_SGC, combined_data = self.read_pk(pardict_NGC["datafile"], pardict_SGC["datafile"], 1, 0)
+        data_NGC, data_SGC, combined_data = self.read_pk(pardict_NGC_SGC["datafile_NGC"], pardict_NGC_SGC["datafile_SGC"], 1, 0)
         
             #print(data)
 
         x_data_NGC = data_NGC[:, 0]
         x_data_SGC = data_SGC[:, 0]
         fitmask_NGC = [
-            (np.where(np.logical_and(x_data_NGC >= pardict_NGC["xfit_min"][0], x_data_NGC <= pardict_NGC["xfit_max"][0]))[0]).astype(
+            (np.where(np.logical_and(x_data_NGC >= pardict_NGC_SGC["xfit_min"][0], x_data_NGC <= pardict_NGC_SGC["xfit_max"][0]))[0]).astype(
                 int
             ),
-            (np.where(np.logical_and(x_data_NGC >= pardict_NGC["xfit_min"][1], x_data_NGC <= pardict_NGC["xfit_max"][1]))[0]).astype(
+            (np.where(np.logical_and(x_data_NGC >= pardict_NGC_SGC["xfit_min"][1], x_data_NGC <= pardict_NGC_SGC["xfit_max"][1]))[0]).astype(
                 int
             ),
-            (np.where(np.logical_and(x_data_NGC >= pardict_NGC["xfit_min"][2], x_data_NGC <= pardict_NGC["xfit_max"][2]))[0]).astype(
+            (np.where(np.logical_and(x_data_NGC >= pardict_NGC_SGC["xfit_min"][2], x_data_NGC <= pardict_NGC_SGC["xfit_max"][2]))[0]).astype(
                 int
             ),
         ]
         
         fitmask_SGC = [
-            (np.where(np.logical_and(x_data_SGC >= pardict_SGC["xfit_min"][0], x_data_SGC <= pardict_SGC["xfit_max"][0]))[0]).astype(
+            (np.where(np.logical_and(x_data_SGC >= pardict_NGC_SGC["xfit_min"][0], x_data_SGC <= pardict_NGC_SGC["xfit_max"][0]))[0]).astype(
                 int
             ),
-            (np.where(np.logical_and(x_data_SGC >= pardict_SGC["xfit_min"][1], x_data_SGC <= pardict_SGC["xfit_max"][1]))[0]).astype(
+            (np.where(np.logical_and(x_data_SGC >= pardict_NGC_SGC["xfit_min"][1], x_data_SGC <= pardict_NGC_SGC["xfit_max"][1]))[0]).astype(
                 int
             ),
-            (np.where(np.logical_and(x_data_SGC >= pardict_SGC["xfit_min"][2], x_data_SGC <= pardict_SGC["xfit_max"][2]))[0]).astype(
+            (np.where(np.logical_and(x_data_SGC >= pardict_NGC_SGC["xfit_min"][2], x_data_SGC <= pardict_NGC_SGC["xfit_max"][2]))[0]).astype(
                 int
             ),
         ]
         
         x_data_NGC = [data_NGC[fitmask_NGC[0], 0], data_NGC[fitmask_NGC[1], 0], data_NGC[fitmask_NGC[2], 0]]
         x_data_SGC = [data_SGC[fitmask_SGC[0], 0], data_SGC[fitmask_SGC[1], 0], data_SGC[fitmask_SGC[2], 0]]
-        if pardict_NGC["do_hex"]:
+        if pardict_NGC_SGC["do_hex"]:
             fit_data = np.concatenate([data_NGC[fitmask_NGC[0], 1], data_NGC[fitmask_NGC[1], 2], data_NGC[fitmask_NGC[2], 3]])
         else:
             fit_data_NGC = np.concatenate([data_NGC[fitmask_NGC[0], 1], data_NGC[fitmask_NGC[1], 2]])
@@ -660,22 +659,17 @@ class FittingData_NGC_SGC:
         #print(fit_data)
 
         # Read in, reshape and mask the covariance matrix
-##        cov_flat = np.array(pd.read_csv(pardict_NGC["covfile"], delim_whitespace=True, header=None)) #ORIGINAL COV MATRIX FLAT
-##        cov_flat = cov_flat.flatten() #SO I TRY FLATTENING MINE
-##        nin = len(data_NGC[:, 0])
-##        print("nin = %lf" %nin)
-
-        cov_input = np.array(pd.read_csv(pardict_NGC["covfile"], delim_whitespace=True, header=None)) #+
-        np.savetxt("cov_input_imshow.txt", cov_input)
-        #cov_flat = cov_flat.flatten() #+
-        nin = len(data_NGC[:, 0]) #+
-
+        cov_flat = np.array(pd.read_csv(pardict_NGC_SGC["covfile"], delim_whitespace=True, header=None)) #ORIGINAL COV MATRIX FLAT
+        cov_flat = cov_flat.flatten() #SO I TRY FLATTENING MINE
+        nin = len(data_NGC[:, 0])
+        #print("nin = %lf" %nin)
+        #cov_input = cov_flat[:, 2].reshape((3 * nin, 3 * nin)) #ORIGINAL HAD TWO COLUMNS, MY FLATTENED GRID DOES NOT
         #cov_input = cov_flat.reshape((3 * nin, 3 * nin)) #Only for mono+quad+hex
         #cov_input = cov_flat.reshape((2 * nin, 2 * nin)) #Only for mono+quad
-##        cov_input = cov_flat.reshape((4 * nin, 4 * nin)) #Only for NGC mono, NGC quad, SGC Mono, SGC Quad
+        cov_input = cov_flat.reshape((4 * nin, 4 * nin)) #Only for NGC mono, NGC quad, SGC Mono, SGC Quad
         nx0, nx2 = len(x_data_NGC[0]), len(x_data_NGC[1])
         #print("nx0 = %lf" %nx0)
-        nx4 = len(x_data_NGC[2]) if pardict_NGC["do_hex"] else 0
+        nx4 = len(x_data_NGC[2]) if pardict_NGC_SGC["do_hex"] else 0
         mask0_NGC, mask2_NGC, mask4_NGC = fitmask_NGC[0][:, None], fitmask_NGC[1][:, None], fitmask_NGC[2][:, None]
         mask0_SGC, mask2_SGC, mask4_SGC = fitmask_SGC[0][:, None], fitmask_SGC[1][:, None], fitmask_SGC[2][:, None]
         #cov = np.zeros((nx0 + nx2 + nx4, nx0 + nx2 + nx4)) #original, update for P0, P2, P0, P2 config
@@ -1023,9 +1017,9 @@ def create_plot_NGC_SGC_z1_z3(pardict_NGC_z1, pardict_SGC_z1, pardict_NGC_z3, pa
 
     return plt
 
-def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
+def create_plot_combined(pardict_NGC_SGC, colours, fittingdata):
 
-    if pardict_NGC["do_hex"]:
+    if pardict_NGC_SGC["do_hex"]:
         x_data = fittingdata.data["x_data_NGC"] #Only want to use 1 range to define nx0, nx2
         nx0, nx2, nx4 = len(x_data[0]), len(x_data[1]), len(x_data[2])
         print("nx0 = %lf" %nx0)
@@ -1038,12 +1032,12 @@ def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
     cov = fittingdata.data["cov"]
 
     plt_data_NGC = (
-        np.concatenate(x_data) ** 2 * fit_data_NGC if pardict_NGC["do_corr"] else np.concatenate(x_data) * fit_data_NGC 
+        np.concatenate(x_data) ** 2 * fit_data_NGC if pardict_NGC_SGC["do_corr"] else np.concatenate(x_data) * fit_data_NGC 
     )
     plt_data_SGC = (
-        np.concatenate(x_data) ** 2 * fit_data_SGC if pardict_SGC["do_corr"] else np.concatenate(x_data) * fit_data_SGC 
+        np.concatenate(x_data) ** 2 * fit_data_SGC if pardict_NGC_SGC["do_corr"] else np.concatenate(x_data) * fit_data_SGC 
     )
-    if pardict_NGC["do_corr"]:
+    if pardict_NGC_SGC["do_corr"]:
         plt_err = np.concatenate(x_data) ** 2 * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx4)])
     else:
         plt_err = np.concatenate((x_data, x_data)).flatten() * np.sqrt(cov[np.diag_indices(nx0 + nx2 + nx0 + nx2)])
@@ -1107,7 +1101,7 @@ def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
         label=r"$\rm{SGC} \ P_{2}$"
     )    
 
-    if pardict_NGC["do_hex"]:
+    if pardict_NGC_SGC["do_hex"]:
         plt.errorbar(
             x_data[2],
             plt_data_NGC[nx0 + nx2 :],
@@ -1121,9 +1115,9 @@ def create_plot_combined(pardict_NGC, pardict_SGC, colours, fittingdata):
             zorder=5,
         )
 
-    plt.xlim(0.03, np.amax(pardict_NGC["xfit_max"]) * 1.05)
+    plt.xlim(0.03, np.amax(pardict_NGC_SGC["xfit_max"]) * 1.05)
     plt.ylim(100, 2000)
-    if pardict_NGC["do_corr"]:
+    if pardict_NGC_SGC["do_corr"]:
         plt.xlabel(r"$s\,(h^{-1}\,\mathrm{Mpc})$", fontsize=16)
         plt.ylabel(r"$s^{2}\xi(s)$", fontsize=16, labelpad=5)
     else:

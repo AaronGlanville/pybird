@@ -135,8 +135,8 @@ def prior_transform(u, birdmodel):
         x[2] = (u[2] * (upper_bounds[2] - lower_bounds[2])) + lower_bounds[2]
 
         #omega_b prior from BBN
-        mu, sigma = 0.02166, 0.00037
-        x[3] = scipy.stats.norm.ppf(u[3], loc=mu, scale=sigma) #something something (gaussian centered on 0.02166, width of 0.00037)
+        mu, sigma = 0.02235, 0.00049
+        x[3] = scipy.stats.norm.ppf(u[3], loc=mu, scale=sigma) # (gaussian centered on 0.02166, width of 0.00037)
 
         if birdmodel.pardict["do_marg"]:
         #indexed NGC z1, SGC z1, NGC z3, SGC z3
@@ -219,10 +219,10 @@ def prior_transform(u, birdmodel):
             x[24+(index*22)] = scipy.stats.norm.ppf(u[24+(index*22)], loc=mu, scale=sigma) #cequad_SGC, gaussian of mu = 0, sigma = 2
         #bnlo_SGC:
             mu, sigma = 0, 2
-            x[15+(index*22)] = scipy.stats.norm.ppf(u[25+(index*22)], loc=mu, scale=sigma) #bnlo_SGC, gaussian of mu = 0, sigma = 2
+            x[25+(index*22)] = scipy.stats.norm.ppf(u[25+(index*22)], loc=mu, scale=sigma) #bnlo_SGC, gaussian of mu = 0, sigma = 2
     return x
         
-
+'''
 
 def lnprior(params, birdmodel, data):
     for i, (pardict, model, data) in enumerate(zip(pardicts, birdmodel_z1_z3_combined, fittingdata_z1_z3_combined)):
@@ -350,7 +350,7 @@ def lnprior(params, birdmodel, data):
                 + cequad_prior_SGC
                 + bnlo_prior_SGC
             )
-
+'''
 
 def lnlike(params, birdmodel, fittingdata, plt):
     chi_squared = 0 #initialization, going to add chi^2 terms for all redshift bins

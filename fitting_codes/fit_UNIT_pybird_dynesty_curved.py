@@ -114,7 +114,7 @@ def prior_transform(u, birdmodel):
     lower_bounds = birdmodel.valueref - birdmodel.pardict["order"] * birdmodel.delta
     upper_bounds = birdmodel.valueref + birdmodel.pardict["order"] * birdmodel.delta
 
-    #b1, c2, c4 = params[-3:], + cosmological priors (flat over the upper and lower bounds) [ln10As, h, omega_cdm, omega_b]
+    #b1, c2, c4 = params[-3:], + cosmological priors (flat over the upper and lower bounds) [ln10As, h, omega_cdm, omega_b, Omega_k]
 
     #flat prior on ln10As:
         
@@ -129,22 +129,23 @@ def prior_transform(u, birdmodel):
     x[2] = (u[2] * (upper_bounds[2] - lower_bounds[2])) + lower_bounds[2]
 
     #omega_b prior from BBN
-    #mu, sigma = 0.02166, 0.00037
-    #mu, sigma = 0.02166, 0.00026 #One BBN config
-    mu, sigma = 0.02235, 0.00049 #Alternate BBN config
-    x[3] = scipy.stats.norm.ppf(u[3], loc=mu, scale=sigma) #(gaussian centered on 0.02166, width of 0.00037)
+    mu, sigma = 0.02235, 0.00049
+    x[3] = scipy.stats.norm.ppf(u[3], loc=mu, scale=sigma) # (gaussian centered on 0.02235, width of 0.00049)
+
+    #flat prior on Omega_k
+    x[4] = (u[4] * (upper_bounds[4] - lower_bounds[4])) + lower_bounds[4]
 
     if birdmodel.pardict["do_marg"]:
     
     #b1:
-        x[4] = u[4] * 3.0 #b1, range from 0 to 3
+        x[5] = u[5] * 3.0 #b1, range from 0 to 3
     
     #c2: 
-        x[5] = (u[5] - 0.5) * 8.0 #c2, range from -4 to 4
+        x[6] = (u[6] - 0.5) * 8.0 #c2, range from -4 to 4
 
     #c4:
         mu, sigma = 0, 2
-        x[6] = scipy.stats.norm.ppf(u[6], loc=mu, scale=sigma)#Gaussian centered around 0 with width of 2
+        x[7] = scipy.stats.norm.ppf(u[7], loc=mu, scale=sigma)#Gaussian centered around 0 with width of 2
 
     else:
         #b1, c2, b3, c4, cct, cr1, cr2, ce1, cemono, cequad, bnlo = params[-11:]
@@ -182,7 +183,7 @@ def prior_transform(u, birdmodel):
     #print("returned prior_transform = ")
     #print(x)
     return x
-
+'''
 def lnprior(params, birdmodel, fittingdata, plt):
 
     # Here we define the prior for all the parameters. We'll ignore the constants as they
@@ -260,7 +261,7 @@ def lnprior(params, birdmodel, fittingdata, plt):
             + bnlo_prior
         )
 
-
+'''
 def lnlike(params, birdmodel, fittingdata, plt): #just testing whether dynesty needs only theta of variables passed through lnlike and ptransform
 
     #birdmodel, fittingdata, plt = birdmodel, fittingdata, plt
@@ -290,10 +291,10 @@ def lnlike(params, birdmodel, fittingdata, plt): #just testing whether dynesty n
     #print("vector of bias params defined!")
 
     # Get the bird model
-    ln10As, h, omega_cdm, omega_b = params[:4]
+    ln10As, h, omega_cdm, omega_b, omega_k = params[:5]
     #print("cosmo variables called from params")
 
-    Plin, Ploop = birdmodel.compute_pk([ln10As, h, omega_cdm, omega_b])
+    Plin, Ploop = birdmodel.compute_pk([ln10As, h, omega_cdm, omega_b, omega_k])
     #print("Plin, Ploop calculated")
     P_model, P_model_interp = birdmodel.compute_model(bs, Plin, Ploop, fittingdata.data["x_data"])
     Pi = birdmodel.get_Pi_for_marg(Ploop, bs[0], fittingdata.data["shot_noise"], fittingdata.data["x_data"])
@@ -338,17 +339,15 @@ if __name__ == "__main__":
     # Code to generate a power spectrum template at fixed cosmology using pybird, then fit the AP parameters and fsigma8
     # First read in the config file
     #configfile = sys.argv[1]
-    #configfile = "../config/tbird_NGC_z1_s10fixed_singlefit_singlecov_nbodykit.txt"
-    #configfile = "../config/tbird_SGC_z1_s10fixed_singlefit_nbodykit.txt"
-    #configfile = "../config/tbird_NGC_z3_s10fixed_singlefit_singlecov_nbodykit.txt"
-    configfile = "../config/tbird_SGC_z3_s10fixed_singlefit_nbodykit.txt"
-    #configfile = "../config/tbird_SGC_z1_s10fixed_combined_fits_nbodykit.txt"
+    #configfile = "../config/tbird_NGC_z1_s10fixed_singlefit_singlecov_curved_nbodykit.txt"
+    #configfile = "../config/tbird_SGC_z1_s10fixed_singlefit_curved_nbodykit.txt"
+    #configfile = "../config/tbird_NGC_z3_s10fixed_singlefit_singlecov_curved_nbodykit.txt"
+    configfile = "../config/tbird_SGC_z3_s10fixed_singlefit_curved_nbodykit.txt"
     plot_flag = int(sys.argv[1])
     pardict = ConfigObj(configfile)
 
     # Just converts strings in pardicts to numbers in int/float etc.
     pardict = format_pardict(pardict)
-    print(pardict)
 
     # Set up the data
     fittingdata = FittingData(pardict, shot_noise=float(pardict["shot_noise"]))
@@ -362,9 +361,9 @@ if __name__ == "__main__":
     #    plt = create_plot(pardict, fittingdata)
 
     if birdmodel.pardict["do_marg"]:
-        start = np.concatenate([birdmodel.valueref[:4], [1.3, 0.5, 0.5]])
+        start = np.concatenate([birdmodel.valueref[:5], [1.3, 0.5, 0.5]]) #5 to include curvature as free parameter
     else:
-        start = np.concatenate([birdmodel.valueref[:4], [1.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]])
+        start = np.concatenate([birdmodel.valueref[:5], [1.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]])
 
     # Does an optimization
     #result = do_optimization(lambda *args: -lnpost(*args), start, birdmodel, fittingdata, plt)
@@ -374,7 +373,7 @@ if __name__ == "__main__":
 
     # Calculates evidences using Dynesty
     if birdmodel.pardict["do_marg"]:
-        ndim = 7
+        ndim = 8
     else:
         ndim = 15
     
@@ -398,7 +397,7 @@ if __name__ == "__main__":
     print(len(trimmed_weights))
     output = np.column_stack((trimmed_samples, trimmed_weights))
     print(output)
-    np.savetxt("dynesty_SGC_z3_nbodykit_om_2p235_error_49.dat", output)
+    np.savetxt("dynesty_SGC_z3_nbodykit_om_2p235_err_49_curved.dat", output)
 
     #plt.cla()
     #plt.clf()
@@ -408,6 +407,6 @@ if __name__ == "__main__":
     #plt.show()
     fig, axes = dyplot.traceplot(dres, trace_cmap='viridis', connect=True)
     
-    plt.savefig("dynesty_SGC_z3_nbodykit_om_2p235_error_49.pdf")
+    plt.savefig("dynesty_SGC_z3_nbodykit_om_2p235_err_49_curved.pdf")
 
 
