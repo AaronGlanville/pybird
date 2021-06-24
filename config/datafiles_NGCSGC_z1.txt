@@ -1,0 +1,2 @@
+/mnt/c/Users/s4393083/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_NGC_z1.dat
+/mnt/c/Users/s4393083/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_SGC_z1.dat

@@ -1,0 +1,12 @@
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_NGC_z1.dat
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_SGC_z1.dat
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_NGC_z2.dat
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_SGC_z2.dat
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_NGC_z3.dat
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_SGC_z3.dat
+#/mnt/c/Users/s4393083/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_NGC_z1.dat
+#/mnt/c/Users/s4393083/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_SGC_z1.dat
+#/mnt/c/Users/s4393083/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_NGC_z2.dat
+#/mnt/c/Users/s4393083/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_SGC_z2.dat
+#/mnt/c/Users/s4393083/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_NGC_z3.dat
+#/mnt/c/Users/s4393083/pybird/Pk_Expanded_Box/Avg_ps1D_bianchi_SGC_z3.dat

@@ -1,0 +1,12 @@
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/EFT_Grids_Curved_lin_interp/NGC_z1_GridsEFT_curved/
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/EFT_Grids_Curved_lin_interp/SGC_z1_GridsEFT_curved/
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/EFT_Grids_Curved_lin_interp/NGC_z2_GridsEFT_curved/
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/EFT_Grids_Curved_lin_interp/SGC_z2_GridsEFT_curved/
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/EFT_Grids_Curved_lin_interp/NGC_z3_GridsEFT_curved/
+/data/s4393083/pybird-parallel/pybird-parallel_z1_z2_z3_direct_cullan/pybird_z1_z2_z3_local_install/pybird/EFT_Grids_Curved_lin_interp/SGC_z3_GridsEFT_curved/
+#/mnt/c/Users/s4393083/EFT_Grids_Curved_lin_interp/NGC_z1_GridsEFT_curved/
+#/mnt/c/Users/s4393083/EFT_Grids_Curved_lin_interp/SGC_z1_GridsEFT_curved/
+#/mnt/c/Users/s4393083/EFT_Grids_Curved_lin_interp/NGC_z2_GridsEFT_curved/
+#/mnt/c/Users/s4393083/EFT_Grids_Curved_lin_interp/SGC_z2_GridsEFT_curved/
+#/mnt/c/Users/s4393083/EFT_Grids_Curved_lin_interp/NGC_z3_GridsEFT_curved/
+#/mnt/c/Users/s4393083/EFT_Grids_Curved_lin_interp/SGC_z3_GridsEFT_curved/

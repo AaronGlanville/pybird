@@ -247,10 +247,6 @@ class Correlator(object):
                 default=False,
             ),
         }
-        #Added definitions for window function creation info: #Filename for config space window function
-        self.window_configspace_file = {"window_configspace_file": Option("window_configspace_file", str, description="Config space file that I added to config object to generate window function", default=None,)}
-        self.path_to_window = {
-            "path_to_window": Option("path_to_window", str, description="Path to window function directory", default=None)}
 
         if config_dict is not None:
             self.set(config_dict, load_engines=load_engines)
@@ -822,7 +818,7 @@ class Correlator(object):
         if self.config["skycut"] > 1:
             if self.cosmo["D"] is None:
                 raise Exception("You asked multi skycuts. Please specify the growth function 'D'. ")
-            elif len(smo["D"]) is not self.config["skycut"]:
+            elif len(self.cosmo["D"]) is not self.config["skycut"]:
                 raise Exception("Please specify (in a list) as many growth functions 'D' as the corresponding skycuts.")
 
         if self.config["multipole"] == 0:

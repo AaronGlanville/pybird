@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-projection.py original format
-
-Any edits include #+
-"""
-
 import os
 import numpy as np
 from numpy import pi, cos, sin, log, exp, sqrt, trapz
@@ -180,12 +173,11 @@ class Projection(object):
             Integrandmu = np.einsum("km,lkm->lkm", Pkmu, self.arrayLegendremugrid)
         return 2 * np.trapz(Integrandmu, x=self.mugrid, axis=-1)
 
-    def AP(self, bird=None, q=None):
+    def AP(self, bird=None, q=None, overwrite=True):
         """
         Apply the AP effect to the bird power spectrum or correlation function
         Credit: Jerome Gleyzes
-            """
-        print("Accessed AP funcion")  #+
+        """
         if q is None:
             qperp, qpar = self.get_AP_param(bird)
         else:
@@ -198,38 +190,64 @@ class Projection(object):
             arrayLegendremup = np.array([legendre(2 * l)(mup) for l in range(self.co.Nl)])
 
             if bird.with_bias:
-                bird.fullCf = self.integrAP(self.co.s, bird.fullCf, sp, arrayLegendremup, many=False)
+                if overwrite:
+                    bird.fullCf = self.integrAP(self.co.s, bird.fullCf, sp, arrayLegendremup, many=False)
+                else:
+                    return self.integrAP(self.co.s, bird.fullCf, sp, arrayLegendremup, many=False)
             else:
-                bird.C11l = self.integrAP(self.co.s, bird.C11l, sp, arrayLegendremup, many=True)
-                bird.Cctl = self.integrAP(self.co.s, bird.Cctl, sp, arrayLegendremup, many=True)
-                bird.Cloopl = self.integrAP(self.co.s, bird.Cloopl, sp, arrayLegendremup, many=True)
+                C11l_AP = self.integrAP(self.co.s, bird.C11l, sp, arrayLegendremup, many=True)
+                Cctl_AP = self.integrAP(self.co.s, bird.Cctl, sp, arrayLegendremup, many=True)
+                Cloopl_AP = self.integrAP(self.co.s, bird.Cloopl, sp, arrayLegendremup, many=True)
+                Cnlol_AP = self.integrAP(self.co.s, bird.Cnlol, sp, arrayLegendremup, many=True)
+                if overwrite:
+                    bird.C11l, bird.Cctl, bird.Cloopl, bird.Cnlol = C11l_AP, Cctl_AP, Cloopl_AP, Cnlol_AP
+                else:
+                    return C11l_AP, Cctl_AP, Cloopl_AP, Cnlol_AP
 
         else:
             F = qpar / qperp
-            kp = self.kgrid / qperp * (1 + self.mugrid ** 2 * (F ** -2 - 1)) ** 0.5
-            mup = self.mugrid / F * (1 + self.mugrid ** 2 * (F ** -2 - 1)) ** -0.5
+            Ffac = np.sqrt((1 + self.mugrid ** 2 * (1 / (F ** 2) - 1)))
+            kp = self.kgrid / qperp * Ffac
+            mup = self.mugrid / F / Ffac
             arrayLegendremup = np.array([legendre(2 * l)(mup) for l in range(self.co.Nl)])
 
             if bird.with_bias:
-                bird.fullPs = (
-                    1.0 / (qperp ** 2 * qpar) * self.integrAP(self.co.k, bird.fullPs, kp, arrayLegendremup, many=False)
-                )
+                if overwrite:
+                    bird.fullPs = (
+                        1.0
+                        / (qperp ** 2 * qpar)
+                        * self.integrAP(self.co.k, bird.fullPs, kp, arrayLegendremup, many=False)
+                    )
+                else:
+                    return (
+                        1.0
+                        / (qperp ** 2 * qpar)
+                        * self.integrAP(self.co.k, bird.fullPs, kp, arrayLegendremup, many=False)
+                    )
             else:
-                bird.P11l = (
+                P11l_AP = (
                     1.0 / (qperp ** 2 * qpar) * self.integrAP(self.co.k, bird.P11l, kp, arrayLegendremup, many=True)
                 )
-                bird.Pctl = (
+                Pctl_AP = (
                     1.0 / (qperp ** 2 * qpar) * self.integrAP(self.co.k, bird.Pctl, kp, arrayLegendremup, many=True)
                 )
-                bird.Ploopl = (
+                Ploopl_AP = (
                     1.0 / (qperp ** 2 * qpar) * self.integrAP(self.co.k, bird.Ploopl, kp, arrayLegendremup, many=True)
                 )
+                Pnlol_AP = (
+                    1.0 / (qperp ** 2 * qpar) * self.integrAP(self.co.k, bird.Pnlol, kp, arrayLegendremup, many=True)
+                )
+                if overwrite:
+                    bird.P11l, bird.Pctl, bird.Ploopl, bird.Pnlol = P11l_AP, Pctl_AP, Ploopl_AP, Pnlol_AP
+                else:
+                    return P11l_AP, Pctl_AP, Ploopl_AP, Pnlol_AP
 
     def setWindow(self, load=True, save=True, Nl=3, withmask=True, windowk=0.05):
         """
         Pre-load the window function to apply to the power spectrum by convolution in Fourier space
         Wal is an array of shape l,l',k',k where so that $P_a(k) = \int dk' \sum_l W_{a l}(k,k') P_l(k')$
         If it cannot find the file, it will compute a new one from a provided mask in configuration space.
+
         Inputs
         ------
         withmask: whether to only do the convolution over a small range around k
@@ -249,8 +267,7 @@ class Projection(object):
             self.p = np.concatenate(
                 [np.geomspace(1e-5, 0.015, 100, endpoint=False), np.arange(0.015, self.co.kmax, 1e-3)]
             )
-            #window_fourier_file = os.path.join(self.path_to_window, "%s_Nl%s_kmax%.2f.npy") % ( #Original, couldn't locate win_func
-            window_fourier_file = os.path.join("%s_Nl%s_kmax%.2f.npy") % ( #+
+            window_fourier_file = os.path.join(self.path_to_window, "%s_Nl%s_kmax%.2f.npy") % (
                 self.window_fourier_name,
                 self.co.Nl,
                 self.co.kmax,
@@ -319,7 +336,7 @@ class Projection(object):
                 if save:
                     print("Saving mask: %s" % window_fourier_file)
                     np.save(window_fourier_file, self.Wal)
-                    
+
         if not self.co.with_cf:
             self.Wal = self.Wal[:, : self.co.Nl]
 
@@ -338,7 +355,6 @@ class Projection(object):
         """
         Convolve the window functions to a power spectrum P
         """
-        print("Accessed integrWindow") #+
         Pk = interp1d(self.co.k, P, axis=-1, kind="cubic", bounds_error=False, fill_value="extrapolate")(self.p)
         # (multipole l, multipole ' p, k, k' m) , (multipole ', power pectra s, k' m)
         # print (self.Qlldk.shape, Pk.shape)
@@ -349,9 +365,8 @@ class Projection(object):
 
     def Window(self, bird):
         """
-        Apply the survey window function to the bird power spectrum 
+        Apply the survey window function to the bird power spectrum
         """
-        print("Accessed Window") #+
         if self.with_window:
             if self.co.with_cf:
                 if bird.with_bias:
@@ -372,9 +387,11 @@ class Projection(object):
     def dPuncorr(self, xout, fs=0.6, Dfc=0.43 / 0.6777):
         """
         Compute the uncorrelated contribution of fiber collisions
+
         kPS : a cbird wavenumber output, typically a (39,) np array
         fs : fraction of the survey affected by fiber collisions
         Dfc : angular distance of the fiber channel Dfc(z = 0.55) = 0.43Mpc
+
         Credit: Thomas Colas
         """
         dPunc = np.zeros((3, len(xout)))
@@ -394,11 +411,13 @@ class Projection(object):
     def dPcorr(self, xout, kPS, PS, many=False, ktrust=0.25, fs=0.6, Dfc=0.43 / 0.6777):
         """
         Compute the correlated contribution of fiber collisions
+
         kPS : a cbird wavenumber output, typically a (39,) np array
         PS : a cbird power spectrum output, typically a (3, 39) np array
         ktrust : a UV cutoff
         fs : fraction of the survey affected by fiber collisions
         Dfc : angular distance of the fiber channel Dfc(z = 0.55) = 0.43Mpc
+
         Credit: Thomas Colas
         """
         q_ref = np.geomspace(min(kPS), ktrust, num=1024)

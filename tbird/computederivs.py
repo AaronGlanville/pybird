@@ -9,7 +9,7 @@ from configobj import ConfigObj
 sys.path.append("../")
 from tbird.Grid import run_camb, run_class, grid_properties, grid_properties_template
 
-
+"""
 def get_template_grids(parref, nmult=3, nout=3, pad=True, cf=False):
     # order_i is the number of points away from the origin for parameter i
     # The len(freepar) sub-arrays are the outputs of a meshgrid, which I feed to findiff
@@ -41,13 +41,14 @@ def get_template_grids(parref, nmult=3, nout=3, pad=True, cf=False):
 
     # The output is not concatenated for multipoles
     return plin[..., :nout, :, :], ploop[..., :nout, :, :]
+"""
 
 
-def get_grids(parref, nmult=3, nout=3, pad=True, cf=False):
+def get_grids(parref, outgrid, name, nmult=3, nout=3, pad=True, cf=False):
     # order_i is the number of points away from the origin for parameter i
     # The len(freepar) sub-arrays are the outputs of a meshgrid, which I feed to findiff
-    outgrid = parref["outgrid"]
-    name = parref["code"].lower() + "-" + parref["gridname"]
+    # outgrid = parref["outgrid"]
+    # name = parref["code"].lower() + "-" + parref["gridname"]
 
     # Coordinates have shape (len(freepar), 2 * order_1 + 1, ..., 2 * order_n + 1)
     shapecrd = np.concatenate([[len(parref["freepar"])], np.full(len(parref["freepar"]), 2 * int(parref["order"]) + 1)])
@@ -75,12 +76,34 @@ def get_grids(parref, nmult=3, nout=3, pad=True, cf=False):
     if pad:
         ploop = np.pad(ploop, padshape + [(0, 0)] * 3, "constant", constant_values=0)
 
+    if cf:
+        plin_noAP = np.load(os.path.join(outgrid, "TableClin_%s.npy" % name))
+    else:
+        plin_noAP = np.load(os.path.join(outgrid, "TablePlin_%s.npy" % name))
+    plin_noAP = plin_noAP.reshape((*shapecrd[1:], nmult, plin_noAP.shape[-2] // nmult, plin_noAP.shape[-1]))
+    if pad:
+        plin_noAP = np.pad(plin_noAP, padshape + [(0, 0)] * 3, "constant", constant_values=0)
+
+    if cf:
+        ploop_noAP = np.load(os.path.join(outgrid, "TableCloop_%s.npy" % name))
+    else:
+        ploop_noAP = np.load(os.path.join(outgrid, "TablePloop_%s.npy" % name))
+    ploop_noAP = ploop_noAP.reshape((*shapecrd[1:], nmult, ploop_noAP.shape[-2] // nmult, ploop_noAP.shape[-1]))
+    if pad:
+        ploop_noAP = np.pad(ploop_noAP, padshape + [(0, 0)] * 3, "constant", constant_values=0)
+
     # The output is not concatenated for multipoles
-    return params, plin[..., :nout, :, :], ploop[..., :nout, :, :]
+    return (
+        params,
+        plin[..., :nout, :, :],
+        ploop[..., :nout, :, :],
+        plin_noAP[..., :nout, :, :],
+        ploop_noAP[..., :nout, :, :],
+    )
 
 
 def get_pder_lin(parref, pi, dx, filename, template=False):
-    """ Calculates the derivative aroud the Grid.valueref points. Do this only once.
+    """Calculates the derivative aroud the Grid.valueref points. Do this only once.
     gridshape is 2 * order + 1, times the number of free parameters
     pi is of shape gridshape, n multipoles, k length, P columns (zeroth being k's)"""
     # Findiff syntax is Findiff((axis, delta of uniform grid along the axis, order of derivative, accuracy))
@@ -235,21 +258,30 @@ def get_pder_lin(parref, pi, dx, filename, template=False):
 def get_PSTaylor(dtheta, derivatives, taylor_order):
     # Shape of dtheta: number of free parameters
     # Shape of derivatives: tuple up to third derivative where each element has shape (num free par, multipoles, lenk, columns)
-    t1 = np.einsum("p,pmkb->mkb", dtheta, derivatives[1])
-    t2diag = np.einsum("p,pmkb->mkb", dtheta ** 2, derivatives[2])
-    t2nondiag = np.sum([dtheta[d[0]] * dtheta[d[1]] * d[2] for d in derivatives[3]], axis=0)
-    t3diag = np.einsum("p,pmkb->mkb", dtheta ** 3, derivatives[4])
-    t3semidiagx = np.sum([dtheta[d[0]] ** 2 * dtheta[d[1]] * d[2] for d in derivatives[5]], axis=0)
-    t3semidiagy = np.sum([dtheta[d[0]] * dtheta[d[1]] ** 2 * d[2] for d in derivatives[6]], axis=0)
-    t3nondiag = np.sum([dtheta[d[0]] * dtheta[d[1]] * dtheta[d[2]] * d[3] for d in derivatives[7]], axis=0)
-    t4diag = np.einsum("p,pmkb->mkb", dtheta ** 4, derivatives[8])
-    t4semidiagx = np.sum([dtheta[d[0]] ** 3 * dtheta[d[1]] * d[2] for d in derivatives[9]], axis=0)
-    t4semidiagy = np.sum([dtheta[d[0]] * dtheta[d[1]] ** 3 * d[2] for d in derivatives[10]], axis=0)
-    t4semidiagx2 = np.sum([dtheta[d[0]] ** 2 * dtheta[d[1]] * dtheta[d[2]] * d[3] for d in derivatives[11]], axis=0)
-    t4semidiagy2 = np.sum([dtheta[d[0]] * dtheta[d[1]] ** 2 * dtheta[d[2]] * d[3] for d in derivatives[12]], axis=0)
-    t4semidiagz2 = np.sum([dtheta[d[0]] * dtheta[d[1]] * dtheta[d[2]] ** 2 * d[3] for d in derivatives[13]], axis=0)
+    t1 = np.einsum("pd,pmkb->dmkb", dtheta, derivatives[1])
+    t2diag = np.einsum("pd,pmkb->dmkb", dtheta ** 2, derivatives[2])
+    t2nondiag = np.sum([np.multiply.outer(dtheta[d[0]] * dtheta[d[1]], d[2]) for d in derivatives[3]], axis=0)
+    t3diag = np.einsum("pd,pmkb->dmkb", dtheta ** 3, derivatives[4])
+    t3semidiagx = np.sum([np.multiply.outer(dtheta[d[0]] ** 2 * dtheta[d[1]], d[2]) for d in derivatives[5]], axis=0)
+    t3semidiagy = np.sum([np.multiply.outer(dtheta[d[0]] * dtheta[d[1]] ** 2, d[2]) for d in derivatives[6]], axis=0)
+    t3nondiag = np.sum(
+        [np.multiply.outer(dtheta[d[0]] * dtheta[d[1]] * dtheta[d[2]], d[3]) for d in derivatives[7]], axis=0
+    )
+    t4diag = np.einsum("pd,pmkb->dmkb", dtheta ** 4, derivatives[8])
+    t4semidiagx = np.sum([np.multiply.outer(dtheta[d[0]] ** 3 * dtheta[d[1]], d[2]) for d in derivatives[9]], axis=0)
+    t4semidiagy = np.sum([np.multiply.outer(dtheta[d[0]] * dtheta[d[1]] ** 3, d[2]) for d in derivatives[10]], axis=0)
+    t4semidiagx2 = np.sum(
+        [np.multiply.outer(dtheta[d[0]] ** 2 * dtheta[d[1]] * dtheta[d[2]], d[3]) for d in derivatives[11]], axis=0
+    )
+    t4semidiagy2 = np.sum(
+        [np.multiply.outer(dtheta[d[0]] * dtheta[d[1]] ** 2 * dtheta[d[2]], d[3]) for d in derivatives[12]], axis=0
+    )
+    t4semidiagz2 = np.sum(
+        [np.multiply.outer(dtheta[d[0]] * dtheta[d[1]] * dtheta[d[2]] ** 2, d[3]) for d in derivatives[13]], axis=0
+    )
     t4nondiag = np.sum(
-        [dtheta[d[0]] * dtheta[d[1]] * dtheta[d[2]] * dtheta[d[3]] * d[4] for d in derivatives[14]], axis=0
+        [np.multiply.outer(dtheta[d[0]] * dtheta[d[1]] * dtheta[d[2]] * dtheta[d[3]], d[4]) for d in derivatives[14]],
+        axis=0,
     )
     allPS = derivatives[0] + t1
     if taylor_order > 1:
@@ -317,11 +349,12 @@ if __name__ == "__main__":
     name = pardict["code"].lower() + "-" + pardict["gridname"]
 
     # Get the grid properties
+    """
     if template:
         if pardict["code"] == "CAMB":
-            kin, Pin, Om, Da, Hz, fN, sigma8, sigma12, r_d = run_camb(pardict)
+            kin, Pin, Om, Da, Hz, fN, sigma8, sigma8_0, sigma12, r_d = run_camb(pardict)
         else:
-            kin, Pin, Om, Da, Hz, fN, sigma8, sigma12, r_d = run_class(pardict)
+            kin, Pin, Om, Da, Hz, fN, sigma8, sigma8_0, sigma12, r_d = run_class(pardict)
         valueref, delta, flattenedgrid, truecrd = grid_properties_template(pardict, fN, sigma8)
 
         print("Let's start!")
@@ -330,7 +363,11 @@ if __name__ == "__main__":
         print("Got grids in %s seconds" % str(time.time() - t0))
         print("Calculate derivatives of linear PS")
         get_pder_lin(
-            pardict, plingrid, delta, os.path.join(pardict["outgrid"], "DerPlin_%s_template.npy" % name), template=True,
+            pardict,
+            plingrid,
+            delta,
+            os.path.join(pardict["outgrid"], "DerPlin_%s_template.npy" % name),
+            template=True,
         )
         print("Calculate derivatives of loop PS")
         get_pder_lin(
@@ -345,7 +382,11 @@ if __name__ == "__main__":
         print("Got grids in %s seconds" % str(time.time() - t0))
         print("Calculate derivatives of linear CF")
         get_pder_lin(
-            pardict, plingrid, delta, os.path.join(pardict["outgrid"], "DerClin_%s_template.npy" % name), template=True,
+            pardict,
+            plingrid,
+            delta,
+            os.path.join(pardict["outgrid"], "DerClin_%s_template.npy" % name),
+            template=True,
         )
         print("Calculate derivatives of loop CF")
         get_pder_lin(
@@ -357,22 +398,32 @@ if __name__ == "__main__":
         )
 
     else:
-        valueref, delta, flattenedgrid, truecrd = grid_properties(pardict)
+    """
 
-        print("Let's start!")
-        t0 = time.time()
-        paramsgrid, plingrid, ploopgrid = get_grids(pardict)
-        print("Got PS grids in %s seconds" % str(time.time() - t0))
-        print("Calculate derivatives of params")
-        get_pder_lin(pardict, paramsgrid, delta, os.path.join(pardict["outgrid"], "DerParams_%s.npy" % name))
-        print("Calculate derivatives of linear PS")
-        get_pder_lin(pardict, plingrid, delta, os.path.join(pardict["outgrid"], "DerPlin_%s.npy" % name))
-        print("Calculate derivatives of loop PS")
-        get_pder_lin(pardict, ploopgrid, delta, os.path.join(pardict["outgrid"], "DerPloop_%s.npy" % name))
+    valueref, delta, flattenedgrid, truecrd = grid_properties(pardict)
 
-        paramsgrid, clingrid, cloopgrid = get_grids(pardict, cf=True)
-        print("Got CF grids in %s seconds" % str(time.time() - t0))
-        print("Calculate derivatives of linear CF")
-        get_pder_lin(pardict, clingrid, delta, os.path.join(pardict["outgrid"], "DerClin_%s.npy" % name))
-        print("Calculate derivatives of loop CF")
-        get_pder_lin(pardict, cloopgrid, delta, os.path.join(pardict["outgrid"], "DerCloop_%s.npy" % name))
+    print("Let's start!")
+    t0 = time.time()
+    paramsgrid, plingrid, ploopgrid, plingrid_noAP, ploopgrid_noAP = get_grids(pardict)
+    print("Got PS grids in %s seconds" % str(time.time() - t0))
+    print("Calculate derivatives of params")
+    get_pder_lin(pardict, paramsgrid, delta, os.path.join(pardict["outgrid"], "DerParams_%s.npy" % name))
+    print("Calculate derivatives of linear PS")
+    get_pder_lin(pardict, plingrid, delta, os.path.join(pardict["outgrid"], "DerPlin_%s.npy" % name))
+    print("Calculate derivatives of loop PS")
+    get_pder_lin(pardict, ploopgrid, delta, os.path.join(pardict["outgrid"], "DerPloop_%s.npy" % name))
+    print("Calculate derivatives of linear PS without AP effect")
+    get_pder_lin(pardict, plingrid_noAP, delta, os.path.join(pardict["outgrid"], "DerPlin_%s_noAP.npy" % name))
+    print("Calculate derivatives of loop PS without AP effect")
+    get_pder_lin(pardict, ploopgrid_noAP, delta, os.path.join(pardict["outgrid"], "DerPloop_%s_noAP.npy" % name))
+
+    paramsgrid, clingrid, cloopgrid, clingrid_noAP, cloopgrid_noAP = get_grids(pardict, cf=True)
+    print("Got CF grids in %s seconds" % str(time.time() - t0))
+    print("Calculate derivatives of linear CF")
+    get_pder_lin(pardict, clingrid, delta, os.path.join(pardict["outgrid"], "DerClin_%s.npy" % name))
+    print("Calculate derivatives of loop CF")
+    get_pder_lin(pardict, cloopgrid, delta, os.path.join(pardict["outgrid"], "DerCloop_%s.npy" % name))
+    print("Calculate derivatives of linear CF without AP effect")
+    get_pder_lin(pardict, clingrid_noAP, delta, os.path.join(pardict["outgrid"], "DerClin_%s_noAP.npy" % name))
+    print("Calculate derivatives of loop CF without AP effect")
+    get_pder_lin(pardict, cloopgrid_noAP, delta, os.path.join(pardict["outgrid"], "DerCloop_%s_noAP.npy" % name))

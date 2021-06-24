@@ -1,0 +1,6 @@
+/Volumes/Work/UQ/DESI/cBIRD/BOSSdata/NGC+SGC_z1/Pk_Nbodykit/Nbodykit_BOSS_NGC_z1_Pk.out
+/Volumes/Work/UQ/DESI/cBIRD/BOSSdata/NGC+SGC_z1/Pk_Nbodykit/Nbodykit_BOSS_SGC_z1_Pk.out
+/Volumes/Work/UQ/DESI/cBIRD/BOSSdata/NGC+SGC_z2/Pk_Nbodykit/Nbodykit_BOSS_NGC_z2_Pk.out
+/Volumes/Work/UQ/DESI/cBIRD/BOSSdata/NGC+SGC_z2/Pk_Nbodykit/Nbodykit_BOSS_SGC_z2_Pk.out
+/Volumes/Work/UQ/DESI/cBIRD/BOSSdata/NGC+SGC_z3/Pk_Nbodykit/Nbodykit_BOSS_NGC_z3_Pk.out
+/Volumes/Work/UQ/DESI/cBIRD/BOSSdata/NGC+SGC_z3/Pk_Nbodykit/Nbodykit_BOSS_SGC_z3_Pk.out
