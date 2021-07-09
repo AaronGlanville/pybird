@@ -1,0 +1,12 @@
+#MONTEPYTHON DATA FILE:
+#Called when using Likelihood.__init__
+
+# Data file for montepython call. Going to direct to
+#Og config file, where we can pass everything to fitting_utils
+# (similar to eft_challenge.data) 
+
+#points to config file:
+pybird_z1_z2_z3.configfile = 'configs/tbird_NGCSGC_z1_z2_z3.txt'
+#z1+z2+z3 marginalised fits
+pybird_z1_z2_z3.use_nuisance = ['b1_NGC_z1', 'c2_NGC_z1', 'b1_SGC_z1', 'c2_SGC_z1', 'b1_NGC_z2', 'c2_NGC_z2', 'b1_SGC_z2', 'c2_SGC_z2', 'b1_NGC_z3', 'c2_NGC_z3', 'b1_SGC_z3', 'c2_SGC_z3']
+
